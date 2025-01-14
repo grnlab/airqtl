@@ -1,0 +1,157 @@
+#!/usr/bin/python3
+# Copyright 2025, Lingfei Wang
+#
+# This file is part of airqtl.
+include: "Snakefile.config"
+
+import itertools
+from os.path import join as pjoin
+from functools import partial
+import pandas as pd
+from airqtl.pipeline import dataset
+
+#Base directories
+pdir=partial(pjoin,dirbase)
+ldir=partial(pjoin,dirlbase)
+#Target files for each step & run
+target1_raw=dataset.datasetfiles_data+dataset.datasetfiles_meta
+target1_subset=dataset.datasetfiles_subset
+target1_qc=dataset.datasetfiles_data+dataset.datasetfiles_meta
+target1_association=['result.tsv.lz4']
+target1_qvalue=[f'{x}.tsv.gz' for x in ['cis','trans']]
+#All targets for each step
+targets_raw=[pdir('raw',x) for x in target1_raw]
+targets=list(targets_raw)
+targets_subset=[]
+targets_qc=[]
+targets_association=[]
+targets_qvalue=[]
+targets_mr=[]
+targets_merge=[]
+
+subset_covs_values=[','.join(x) for x in subset_covs]
+
+try:
+	#Load unique covariate value combinations
+	t1=dataset.load_dataset(pdir('raw'),select=['dccd','dcdd','dd'],check_full='none')
+	t2=[t1['dccd'][subset_covs[0]],t1['dcdd'][subset_covs[1]]]
+	t2=[tuple(x) for x in pd.concat([t2[0],t2[1].iloc[t1['dd']].reset_index(drop=True)],axis=1).drop_duplicates().values.tolist()]
+	covvs=[','.join([str(y) for y in x]) for x in t2]
+	#Generate targets for each covariate value combination
+	targets_subset=[pdir('subset',*x) for x in itertools.product(covvs,target1_subset)]
+	targets_qc=[pdir('qc',*x) for x in itertools.product(covvs,target1_qc)]
+	targets_association=[pdir('association',*x) for x in itertools.product(covvs,target1_association)]
+	targets_qvalue=[pdir('qvalue',*x) for x in itertools.product(covvs,target1_qvalue)]
+	targets_mr=[pdir('mr.tsv.gz')]
+	targets_merge=[pdir('merge.tsv.gz')]
+	targets+=targets_subset+targets_qc+targets_association+targets_qvalue+targets_mr+targets_merge
+except FileNotFoundError:
+	pass
+
+if covs=='all':
+	params_association+=" --ndccc '*' --ndccd '*' --ndcdc '*' --ndcdd '*'"
+elif covs=='none':
+	pass
+else:
+	raise ValueError(f'Unknown covs={covs}')
+
+param0=''
+if verbose:
+	param0+='-v'
+
+rule all:
+	input:
+		targets
+
+rule raw:
+	output:
+		targets_raw
+	shell:
+		"""
+		set -eo pipefail
+		mkdir -p "$(dirname "{output[0]}")"
+		wget -qO """+pdir('raw','raw.tar')+""" 'https://zenodo.org/record/14624609/files/randolph.tar?download=1'
+		cd '"""+pdir('raw')+"""'
+		tar xf raw.tar
+		rm raw.tar
+		"""
+
+rule subset:
+	input:
+		targets_raw
+	output:
+		[pdir('subset','{subset}',f'{x}') for x in target1_subset]
+	log:
+		ldir('subset','{subset}.log')
+	shell:
+		"""
+		mkdir -p "$(dirname "{output[0]}")" "$(dirname "{log}")"
+		python3 -m airqtl {param0} eqtl subset {params_subset} "$(dirname "{input[0]}")" "$(dirname "{output[0]}")" '{subset_covs_values[0]}' '{subset_covs_values[1]}' {wildcards.subset} &> "{log}"
+		"""
+		
+rule qc:
+	input:
+		[pdir('subset','{subset}',f'{x}') for x in target1_subset]+targets_raw
+	output:
+		[pdir('qc','{subset}',f'{x}') for x in target1_qc]
+	log:
+		ldir('qc','{subset}.log')
+	shell:
+		"""
+		set -eo pipefail
+		mkdir -p "$(dirname "{output[0]}")" "$(dirname "{log}")"
+		python3 -m airqtl {param0} eqtl qc --diri_raw "$(dirname "{targets_raw[0]}")" {params_qc} "$(dirname "{input[0]}")" "$(dirname "{output[0]}")" &> "{log}"
+		"""+"""
+		""".join(['cp "$(dirname "{targets_raw[0]}")/'+x+'" "$(dirname "{output[0]}")/"' for x in dataset.datasetfiles_meta])
+
+rule association:
+	input:
+		[pdir('qc','{subset}',f'{x}') for x in target1_qc]
+	output:
+		[pdir('association','{subset}',f'{x}') for x in target1_association]
+	log:
+		ldir('association','{subset}.log')
+	shell:
+		"""
+		set -eo pipefail
+		mkdir -p "$(dirname "{output[0]}")" "$(dirname "{log}")"
+		python3 -m airqtl {param0} eqtl association {params_association} "$(dirname "{input[0]}")" "{output[0]}" &> "{log}"
+		"""
+
+rule qvalue:
+	input:
+		[pdir('association','{subset}',f'{x}') for x in target1_association]+[pdir('qc','{subset}',f'{x}') for x in target1_qc]
+	output:
+		[pdir('qvalue','{subset}',f'{x}') for x in target1_qvalue]
+	log:
+		ldir('qvalue','{subset}.log')
+	shell:
+		"""
+		set -eo pipefail
+		mkdir -p "$(dirname "{output[0]}")" "$(dirname "{log}")"
+		python3 -m airqtl {param0} eqtl qvalue {params_qvalue} "$(dirname "{input[1]}")" "{input[0]}" "{output[0]}" "{output[1]}" &> "{log}"
+		"""
+
+rule mr:
+	input:
+		targets_qvalue
+	output:
+		targets_mr
+	log:
+		ldir('mr.log')
+	shell:
+		"""
+		python3 -m airqtl {param0} cgrn mr {params_mr} "$(dirname "$(dirname "{input[0]}")")" "{output[0]}" &> "{log}"
+		"""
+
+rule merge:
+	input:
+		targets_mr+targets_qc
+	output:
+		targets_merge
+	log:
+		ldir('merge.log')
+	shell:
+		"""
+		python3 -m airqtl {param0} cgrn merge {params_merge} "{input[0]}" "$(dirname "$(dirname "{input[1]}")")" "{output[0]}" &> "{log}"
+		"""
