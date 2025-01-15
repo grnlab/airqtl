@@ -3,7 +3,7 @@ Airqtl
 =========
 Airqtl is an efficient method to map expression quantitative trait loci (eQTLs) and infer causal gene regulatory networks (cGRNs) from population-scale single-cell studies. The core of airqtl is Array of Interleaved Repeats (AIR), an efficient data structure to store and process donor-level data in the cell-donor hierarchical setting. Airqtl offers over 8 orders of magnitude of acceleration of eQTL mapping with linear mixed models, arising from its superior time complexity and Graphic Processing Unit (GPU) utilization. 
 
-**This respository is being actively updated. Please check back later.**
+**This respository is being actively updated. Please check back often.**
 
 Installation
 =============
@@ -11,11 +11,11 @@ Airqtl is on `PyPI <https://pypi.org/project/airqtl>`_. To install airqtl, you s
 
 Usage
 =====
-Airqtl provides command-line and python interfaces. For starters, you can run airqtl by typing ``airqtl -h`` on command-line. See our tutorials below.
+Airqtl provides both command-line and python interfaces. For starters, you can run airqtl by typing ``airqtl -h`` on command-line. Try our tutorial below and adapt it to your own dataset.
 
 Tutorials
 ==========================
-Currently we provide one tutorial to map cell state-specific single-cell eQTLs and infer cGRNs from the Randolph et al dataset in `docs/tutorials`. We are working on better documentation so you can easily understand the tutorial and repurpose it for your own dataset.
+Currently we provide `one tutorial <docs/tutorials/randolph>`_ to map cell state-specific single-cell eQTLs and infer cGRNs from the Randolph et al dataset in `docs/tutorials`.
 
 Issues
 ==========================
@@ -23,7 +23,7 @@ Pease raise an issue on `github <https://github.com/grnlab/airqtl/issues/new>`_.
 
 References
 ==========================
-TBA
+* *"Airqtl dissects cell state-specific causal gene regulatory networks with efficient single-cell eQTL mapping"* (2025) by Lingfei Wang. bioRxiv.
 
 FAQ
 ==========================
