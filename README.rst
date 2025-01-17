@@ -27,11 +27,18 @@ References
 
 FAQ
 ==========================
-* What does airqtl stand for?
+* **What does airqtl stand for**?
 	Array of Interleaved Repeats for Quantitative Trait Loci
 
-* I installed airqtl but typing ``airqtl`` says 'command not found'.
+* **Why do I see this error:** ``AssertionError: Torch not compiled with CUDA enabled``?
+  
+  This is because you installed a CPU-only pytorch but tried to run it on GPU. You have several options:
+  
+  1. To run pytorch on **CPU**, set `device='cpu'` in `Snakefile.config` of the tutorial pipeline you use.
+  2. To run pytorch on **GPU**, reinstall pytorch with GPU support at `Installation`_.
+
+* **I installed airqtl but typing ``airqtl`` says 'command not found'**.
 	See below.
 	
-* How do I use a specific python version for airqtl's command-line interface?
+* **How do I use a specific python version for airqtl's command-line interface**?
 	You can always use the python command to run airqtl, such as ``python3 -m airqtl`` to replace command ``airqtl``. You can also use a specific path or version for python, such as ``python3.12 -m airqtl`` or ``/usr/bin/python3.12 -m airqtl``. Make sure you have installed airqtl for this python version.
