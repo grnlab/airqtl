@@ -110,8 +110,7 @@ def multi(dx,dy,dc0,dc1,ncs,mkl,mku,l0,f0,f1,nxd,out,fmt,bsx:int=128,bsy:int=327
 	from scipy.stats import beta
 
 	from .air import air
-	from .op import (mmatmul, mmatmul1, mmatmul2, mmmatmul, mmsquare, msquare,
-	                 msquare1)
+	from .op import (mmatmul, mmatmul1, mmatmul2, mmmatmul, mmsquare, msquare,msquare1)
 	if mkl is None:
 		if mku is not None or l0 is not None:
 			raise TypeError('Set mkl, mku, l0 all to None for linear model or all to not None for linear mixed model.')
@@ -130,7 +129,6 @@ def multi(dx,dy,dc0,dc1,ncs,mkl,mku,l0,f0,f1,nxd,out,fmt,bsx:int=128,bsy:int=327
 	ns = ncs.sum()
 	if dc0 is None:
 		dc0=np.zeros([0,ns],dtype=float)
-	nc0 = dc0.shape[0]
 	nc1 = dc1.shape[0]
 	# Validity checks
 	if nd == 0:
@@ -525,5 +523,6 @@ def multi_gxc(dx,dy,dc0,dc1,ncs,mkl,mku,l0,nxd,out,fmt,dom:bool=False,**ka):
 	if nxd>dc0.shape[0] or nxd<=0:
 		raise ValueError('nxd must be greater than zero and less than or equal to the number of intermediate covariates (dc0.shape[0]).')
 	return multi(dx,dy,dc0,dc1,ncs,mkl,mku,l0,partial(multi_gxc_f0,nxd,dom=dom),partial(multi_gxc_f1,nxd),nxd,out,fmt,**ka)
+
 
 assert __name__ != "__main__"

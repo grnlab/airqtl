@@ -3,10 +3,11 @@
 #
 # This file is part of airqtl.
 
-import airqtl
 import numpy as np
 import pytest
 import torch
+
+import airqtl
 
 from . import test_air as tair
 
@@ -54,7 +55,6 @@ class Test_multi:
 		if maf is not None:
 			#Convert to integer predictor
 			assert maf>0 and maf<=0.5
-			t0=dx.shape
 			t1=np.array([maf**2,2*maf*(1-maf),(1-maf)**2]).cumsum()
 			t2=np.array([(rankdata(x)-1)/(dx.shape[1]-1) for x in dx]).T
 			t2[np.nonzero(t2==t2.min(axis=0))]=0

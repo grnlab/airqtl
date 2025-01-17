@@ -7,9 +7,6 @@
 Causal GRN inference.
 """
 
-from typing import Optional
-
-
 def _mr_info(dc0,dt0):
 	t1=set(dc0['Gene'].tolist())|set(dt0['Gene'].tolist())
 	return '{} SNPs, {} genes, {} cis genes, {} trans genes, {} cis SNP-genes, {} trans SNP-genes'.format(len(dc0['SNP'].unique()),len(t1),len(dc0['Gene'].unique()),len(dt0['Gene'].unique()),len(dc0),len(dt0))
@@ -126,8 +123,6 @@ def mr(diri:str,fo:str,full:bool=False,qcis:float=0.1,qtrans:float=0.5,pcis:floa
 	logging.info('Writing to file {}'.format(fo))
 	ans.to_csv(fo,sep='\t',header=True,index=False)
 
-mr._da=True
-
 def _merge_relative_variability(d0,name):
 	import numpy as np
 	return np.abs((d0[f'{name}_max']-d0[f'{name}_min'])/(2*np.max(np.abs(d0[[f'{name}_max',f'{name}_min']]))))
@@ -218,6 +213,8 @@ def merge(fi:str,diri:str,fo:str,nmin:int=2,cvmin:float=0,svmax:float=1)->None:
 	logging.info('Writing to file {}'.format(fo))
 	ans.to_csv(fo,sep='\t',header=True,index=False)
 
+
+mr._da=True
 merge._da=True
 
 assert __name__ != "__main__", "This module is not meant to be run directly."

@@ -36,7 +36,7 @@ def estimate(dg,loc=None,method='raw',norm=True):
 		raise ValueError('Location of each genotype must have at least 1 row.')
 	s=np.sort(np.unique(loc[0]))
 	ns=len(s)
-	if not (ss==np.arange(1,ns+1)).all():
+	if not (s==np.arange(1,ns+1)).all():
 		raise ValueError('Chromosome IDs must start with 1 and be sequential (containing no missing chromosome). If not, rename your chromosomes.')
 	if method=='loco':
 		nd=1

@@ -106,9 +106,8 @@ class air(base):
 		if any([self.r[x] is not None and x not in axis for x in range(self.ndim)]):
 			#Output self class
 			return self.__class__(v,[self.r[x] if x not in axis else None for x in range(self.ndim)]).reduce()
-		else:
-			#Output tensor
-			return v
+		#Output tensor
+		return v
 	def tensor(self)->torch.Tensor:
 		ans=self.tofull()
 		assert isinstance(ans,torch.Tensor)
@@ -218,8 +217,8 @@ class air(base):
 			r[xi]=None
 		#Reduce dimensions
 		if len(reduce_dims)>0:
-			assert all([v.shape[x]==1 for x in reduce_dims])
-			assert all([r[x] is None for x in reduce_dims])
+			assert all(v.shape[x]==1 for x in reduce_dims)
+			assert all(r[x] is None for x in reduce_dims)
 			v=v.squeeze(reduce_dims)
 			r=[r[x] for x in range(self.ndim) if x not in reduce_dims]
 		if v.ndim==0:
@@ -276,7 +275,6 @@ class air(base):
 		axis=dict(zip(*axis))
 		v=self.v
 		r=list(self.r)
-		change=False
 		for xi in axis:
 			if r[xi] is None:
 				d=torch.zeros(v.shape[:xi]+(len(axis[xi]),)+v.shape[xi+1:],dtype=v.dtype,device=v.device,requires_grad=self.requires_grad)
@@ -430,24 +428,21 @@ class composite(base):
 				self.vs,self.axis=ans
 				self._refresh()
 				return
-			else:
-				return self.__class__(*ans)
+			return self.__class__(*ans)
 		if isinstance(ans,(torch.Tensor,air)):
 			if inplace:
 				self.vs=[ans]
 				self.axis=0
 				self._refresh()
 				return
-			else:
-				return ans
+			return ans
 		if isinstance(ans,self.__class__):
 			if inplace:
 				self.vs=ans.vs
 				self.axis=ans.axis
 				self._refresh()
 				return
-			else:
-				return ans
+			return ans
 		raise TypeError(f'Unsupported type {type(ans)}.')
 	def _resolve_axis(self,axis:int)->int:
 		"""
@@ -580,8 +575,7 @@ class composite(base):
 		if self.axis!=self.ndim-1:
 			if self.axis==self.ndim-2:
 				return self.__class__([x@other for x in self.vs],self.axis).reduce()
-			else:
-				return self.__class__([self.vs[x]@other.swapaxes(self.axis,0)[self.sizesc[x]:self.sizesc[x+1]].swapaxes(self.axis,0) for x in range(len(self.vs))],self.axis).reduce()
+			return self.__class__([self.vs[x]@other.swapaxes(self.axis,0)[self.sizesc[x]:self.sizesc[x+1]].swapaxes(self.axis,0) for x in range(len(self.vs))],self.axis).reduce()
 		if isinstance(other,self.__class__) and other.axis==other.ndim-2 and len(self.sizes)==len(other.sizes) and (self.sizes==other.sizes).all():
 			ans=reduce(add,[x@y for x,y in zip(self.vs,other.vs)])
 		else:
@@ -615,5 +609,6 @@ class composite(base):
 		if axis==self.axis:
 			return reduce(add,[x.sum(axis=axis) for x in self.vs])
 		return self.__class__([x.sum(axis=axis) for x in self.vs],self.axis-(axis<self.axis)).reduce()
+
 
 assert __name__ != "__main__"
