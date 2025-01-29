@@ -20,7 +20,6 @@ def nll2(vx, mkl, ns):
 	"""Analytical computation of negative log likelihood given the MLEs"""
 	import numpy as np
 	sx0, sx = vx[:2]
-	xb = vx[2:].ravel()
 
 	n = ns.sum()
 	beta = sx**2
@@ -32,7 +31,6 @@ def nll3_est(sx, mkl, dtr, dcr, dpt, dpc, dptc, ns):
 	"""MLE estimator of other variables, given sx"""
 	import numpy as np
 	from normalisr.association import inv_rank
-	nn = len(ns)
 
 	beta = sx**2
 	t0 = (1 - 1 / (1 + beta * mkl))

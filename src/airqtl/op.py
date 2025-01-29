@@ -88,4 +88,5 @@ def mmsquare(mp0aa,mpac,mpcci):
 	"""
 	return torch.clamp(mp0aa-((mpac@mpcci)@mpac.swapaxes(-1,-2)),min=0)
 
+
 assert __name__ != "__main__"

@@ -33,7 +33,7 @@ datasetfiles_data=[
 #Cell subsetting files
 datasetfiles_subset=['dimc.txt.gz','de.tsv.gz','dd.tsv.gz','dccc.tsv.gz','dccd.tsv.gz','dcdd.tsv.gz']
 
-#Metadata files for each dataset not directly used in pipeline
+#Metadata files for each dataset
 datasetfiles_meta=[
 	#Metadata matrix
 	"dmeta.tsv.gz",
@@ -44,7 +44,8 @@ datasetfiles_meta=[
 	#Metadata for genes
 	"dmeta_e.tsv.gz",
 ]
-#Groundtruth dataset files
+
+#Groundtruth dataset files. Developmental purposes only
 datasetfiles_truth=[
 	#True expression proportion
 	"te.tsv.gz",
@@ -59,7 +60,8 @@ datasetfiles_truth=[
 	#True total effect network
 	"tnettot.tsv.gz",
 ]
-assert len(set([x.split('.')[0] for x in datasetfiles_data+datasetfiles_meta+datasetfiles_truth]))==len(datasetfiles_data)+len(datasetfiles_meta)+len(datasetfiles_truth),f'Duplicate dataset file names found'
+
+assert len(set([x.split('.')[0] for x in datasetfiles_data+datasetfiles_meta+datasetfiles_truth]))==len(datasetfiles_data)+len(datasetfiles_meta)+len(datasetfiles_truth),'Duplicate dataset file names found'
 assert len(set(datasetfiles_subset)-set(datasetfiles_data))==0,f'Unknown dataset files: {set(datasetfiles_subset)-set(datasetfiles_data)}'
 
 class EmptyDatasetError(ValueError):
@@ -126,14 +128,14 @@ def check_dataset(d,check_full='data'):
 	assert any(x not in d for x in ['de','dime','dimc']) or d['de'].shape==(ne,nc),f'Expression matrix shape mismatch: {d["de"].shape} vs {(ne,nc)}'
 	assert any(x not in d for x in ['dg','dimg']) or d['dg'].shape[0]==ng,f'Genotype matrix shape[0] mismatch: {d["dg"].shape[0]} vs {ng}'
 	assert any(x not in d for x in ['dd','dimc']) or d['dd'].shape==(nc,),f'Donor ID shape mismatch: {d["dd"].shape} vs {(nc,)}'
-	assert 'dg' not in d or d['dg'].max()<=2,f'Genotype matrix contains values larger than 2'
-	assert 'dg' not in d or d['dg'].min()>=-1,f'Genotype matrix contains values larger than 2'
+	assert 'dg' not in d or d['dg'].max()<=2,'Genotype matrix contains values larger than 2'
+	assert 'dg' not in d or d['dg'].min()>=-1,'Genotype matrix contains values larger than 2'
 	assert any(x not in d for x in ['dd','dimd']) or d['dd'].max()<nd,f'Donor ID contains values larger than {nd}'
-	assert 'dd' not in d or d['dd'].min()>=0,f'Donor ID contains negative values'
+	assert 'dd' not in d or d['dd'].min()>=0,'Donor ID contains negative values'
 	
 	if 'dgmap' in d:
 		assert 'dimd' not in d or d['dgmap'].shape==(nd,),f'Donor map shape mismatch: {d["dgmap"].shape} vs {(nd,)}'
-		assert d['dgmap'].min()>=0,f'Donor map contains negative values'
+		assert d['dgmap'].min()>=0,'Donor map contains negative values'
 		assert 'dg' not in d or d['dgmap'].max()<d['dg'].shape[1],f'Donor map contains values larger than {d["dg"].shape[1]}'
 	if 'dimc' in d:
 		for xi in set(['dccc','dccd'])&dset:
@@ -248,7 +250,7 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 		ans1=smallest_dtype_int(ans1)
 		ans[xi]=ans1
 	if 'dg' in ans and ans['dg'].shape[1]==0:
-		raise EmptyDatasetError(f'Empty dataset with no raw donor')
+		raise EmptyDatasetError('Empty dataset with no raw donor')
 
 	#Load covariates
 	for xi in set(['dccc','dccd','dcdc','dcdd'])&select:
@@ -351,6 +353,7 @@ def load_covs(folder):
 	Return: [covariate names for dccc,dccd,dcdc,dcdc each as a list]
 	"""
 	import gzip
+	import logging
 	from os.path import join as pjoin
 	ans=[]
 	for xi in ['dccc','dccd','dcdc','dcdd']:
@@ -372,10 +375,11 @@ def check_truth(dt,d):
 	assert dt['tdb'].shape==(ncov*d['dg'].shape[0],d['de'].shape[0]),f'Covariate*SNP effect size matrix shape mismatch: {dt["tdb"].shape} vs {(ncov*d["dg"].shape[0],d["de"].shape[0])}'
 	assert dt['tnet'].shape==(d['de'].shape[0],d['de'].shape[0]),f'Network matrix shape mismatch: {dt["tnet"].shape} vs {(d["de"].shape[0],d["de"].shape[0])}'
 	assert dt['tnettot'].shape==(d['de'].shape[0],d['de'].shape[0]),f'Total effect network matrix shape mismatch: {dt["tnettot"].shape} vs {(d["de"].shape[0],d["de"].shape[0])}'
-	assert np.all(dt['te']>=0),f'Negative expression values found'
+	assert np.all(dt['te']>=0),'Negative expression values found'
 
 def load_truth(folder,data=None):
 	import gzip
+	import logging
 	from os.path import join as pjoin
 
 	import numpy as np
@@ -399,6 +403,7 @@ def load_truth(folder,data=None):
 
 def save_truth(dt,folder,data=None):
 	import gzip
+	import logging
 	from os.path import join as pjoin
 
 	import numpy as np

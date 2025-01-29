@@ -25,10 +25,3 @@ except ModuleNotFoundError:
 	torch=dummy_class()
 
 assert __name__ != "__main__"
-
-
-
-
-
-
-

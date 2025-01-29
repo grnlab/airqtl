@@ -1,6 +1,6 @@
 [project]
 name = "airqtl"
-version = "0.1.0"
+version = "0.1.1"
 authors = [
   { name="Lingfei Wang", email="Lingfei.Wang.github@outlook.com" },
 ]
@@ -8,7 +8,7 @@ description = "Array of Interleaved Repeats for Quantitative Trait Loci"
 readme = "README.rst"
 license = {file = "LICENSE"}
 keywords = ["qtl","eqtl","scqtl","sceqtl","lmm","quantitative trait loci","expression quantitative trait loci","single-cell quantitative trait loci","single-cell expression quantitative trait loci","linear mixed model","linear mixed models","population-scale scRNA-seq","gene regulatory network","network inference","causal inference","mendelian randomization"]
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 classifiers = [
 	"Development Status :: 4 - Beta",
 	"License :: OSI Approved :: BSD License",

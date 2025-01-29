@@ -80,8 +80,6 @@ def sim1_sample_check(dg:NDArray,cid:NDArray[int],dimd:NDArray,ncs:NDArray[int],
 	"""
 	Check the validity of up/downsampled dataset
 	"""
-	import numpy as np
-	ng=dg.shape[0]
 	assert dg.shape[1]==nd and cid.shape==(nc,)
 	assert dimd.shape==(nd,)
 	assert ncs.shape==(nd,) and (ncs>0).all() and ncs.sum()==nc
@@ -203,8 +201,8 @@ def sim1_b_prob(locs:Tuple[NDArray,NDArray],bp_a:float=0.1,bp_b:float=1E5,bp_c:f
 	#(row or SNP,col or gene)
 	ans=[[] for _ in range(3)]
 	chrs=sorted(list(reduce(or_,[set(x[:,0]) for x in locs])))
-	for chr in chrs:
-		ids=[np.nonzero(x[:,0]==chr)[0] for x in locs]
+	for chrom in chrs:
+		ids=[np.nonzero(x[:,0]==chrom)[0] for x in locs]
 		if any(len(x)==0 for x in ids):
 			continue
 		#ordered SNP locations
@@ -377,36 +375,35 @@ def sim1_resample(de0,de,dg,dc,ne,ng,nc,nd,ne0,ng0,nc0,nd0,ncs,locs,dime,dimg,di
 		nc=nc0
 	#Donor sampling
 	cid=np.arange(nc0)
-	if nd!=nd0:
-		if nd<nd0:
-			ud=False
-			#Determine if upsampling cells is necessary
-			t1=np.argsort(ncs)[::-1]
-			if ncs[t1[:nd]].sum()<nc:
-				if not upsample:
-					raise RuntimeError('Upsampling not allowed.')
-				uc=True
-			else:
-				uc=False
-			#Initial downsample donor
-			t2=np.random.choice(nd0,nd,replace=False)
-			niter=0
-			while not uc and ncs[t2].sum()<nc and niter<nd0:
-				#Keep removing the smallest donor and add a larger one
-				t3=np.argmin(ncs[t2])
-				t4=list(set(np.nonzero(ncs>ncs[t2[t3]])[0])-set(t2))
-				t2=np.concatenate([t2[:t3],np.random.choice(t4,1),t2[t3+1:]])
-				niter+=1
-			assert niter<nd0
-			selectd=np.sort(t2)
-		elif nd>nd0:
-			ud=True
+	if nd<nd0:
+		ud=False
+		#Determine if upsampling cells is necessary
+		t1=np.argsort(ncs)[::-1]
+		if ncs[t1[:nd]].sum()<nc:
 			if not upsample:
 				raise RuntimeError('Upsampling not allowed.')
-			if K is not None:
-				raise ValueError('Donor upsampling not allowed with K.')
-			logging.warning('Upsampling donors.')
-			selectd=np.r_[np.arange(nd0),np.random.choice(nd0,nd-nd0,replace=True)]
+			uc=True
+		else:
+			uc=False
+		#Initial downsample donor
+		t2=np.random.choice(nd0,nd,replace=False)
+		niter=0
+		while not uc and ncs[t2].sum()<nc and niter<nd0:
+			#Keep removing the smallest donor and add a larger one
+			t3=np.argmin(ncs[t2])
+			t4=list(set(np.nonzero(ncs>ncs[t2[t3]])[0])-set(t2))
+			t2=np.concatenate([t2[:t3],np.random.choice(t4,1),t2[t3+1:]])
+			niter+=1
+		assert niter<nd0
+		selectd=np.sort(t2)
+	elif nd>nd0:
+		ud=True
+		if not upsample:
+			raise RuntimeError('Upsampling not allowed.')
+		if K is not None:
+			raise ValueError('Donor upsampling not allowed with K.')
+		logging.warning('Upsampling donors.')
+		selectd=np.r_[np.arange(nd0),np.random.choice(nd0,nd-nd0,replace=True)]
 	else:
 		ud=False
 		selectd=np.arange(nd0)
@@ -694,7 +691,7 @@ def sim1(
 			raise NotImplementedError
 		dg1=np.array([np.random.permutation(x) for x in dg1],dtype=dg1.dtype)
 	#Compute UMI count and expression proportion
-	ntot, nprop, pcsig, pgsig = calcprops(de0)
+	ntot, nprop, _, _ = calcprops(de0)
 	# total read counts, scaled with gene count
 	if scaleumi==0 and nc<=nc0:
 		#Use real values

@@ -97,8 +97,6 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 	plib.check_dataset(d)
 	plib.save_dataset(d2,diro,check_full='none')
 
-subset._da=True
-
 def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,eezdn:int=0,eezdp:float=0.1,eezn:int=100,eezp:float=0.02,een:int=0,dcn:int=5,dgp:float=0,gp:float=0,scn:int=500,sdn:int=40,sgn:int=10000,sen:int=500)->None:
 	"""
 	Quality control on sceQTL mapping data.
@@ -212,12 +210,12 @@ def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,ee
 		n1+=1
 	#6. Filter raw donors
 	d=plib.filter_rawdonors(d,np.unique(d['dgmap']),check=None)
-	_logdims(d,f'Step 6')
+	_logdims(d,'Step 6')
 	#7. QC dataset
 	if len(d['dimc'])<scn or len(d['dimd'])<sdn or len(d['dimg'])<sgn or len(d['dime'])<sen:
 		#Set to 0 size for too small datasets so pipeline will not proceed
 		d=plib.filter_genotypes(plib.filter_genes(plib.filter_cells(plib.filter_rawdonors(plib.filter_donors(d,np.arange(0)) if len(d['dd'])>0 else d,np.arange(0)),np.arange(0)),np.arange(0)),np.arange(0))
-		_logdims(d,f'Step 7')
+		_logdims(d,'Step 7')
 
 	#Postprocessing: order samples by donor
 	t1=np.argsort(d['dd'])
@@ -248,8 +246,6 @@ def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,ee
 
 	#Save dataset
 	plib.save_dataset(d,diro)
-
-qc._da=True
 
 def association(diri_data:str,fo:str,diri_meta:Optional[str]=None,effect:str='linear',rand:str='d',cisbound:int=1000000,pcut:float=1E-4,device:str='cpu',h0:str='chi2',ndccc:Optional[str]=None,ndccd:Optional[str]=None,ndcdc:Optional[str]=None,ndcdd:Optional[str]=None,ngpc:int=0,fi_subset:Optional[str]=None,na:int=2,bsx:int=None,bsy:int=None)->None:
 	"""
@@ -283,7 +279,7 @@ def association(diri_data:str,fo:str,diri_meta:Optional[str]=None,effect:str='li
 		Maximum distance between SNP and gene to be considered as cis-eQTL. Cis-eQTLs are not subject to p-value filtering by `pcut` in the output file.
 	pcut:
 		Maximum p-value cutoff to filter trans-eQTL mapping results. Accepts:
-	 	* >0:	Standard filtering. Trans-eQTLs with P<pcut are retained.
+		* >0:	Standard filtering. Trans-eQTLs with P<pcut are retained.
 		* =0:	No trans-eQTL will be output.
 		* <0:	No cis- and trans-eQTL will be output. Mainly used to debug or test running speed.
 	device:
@@ -375,14 +371,13 @@ def association(diri_data:str,fo:str,diri_meta:Optional[str]=None,effect:str='li
 	#Load dataset
 	try:
 		d=load_dataset(diri_data,meta=diri_meta)
-	except plib.EmptyDatasetError:
+	except plib.EmptyDatasetError as e:
 		if effect in {'linear','dominant'}:
 			logging.info('Empty dataset. Writing empty file '+fo)
 			with lz4.frame.open(fo,mode='wt') as f:
 				f.write(fmt_header([None])+linesep)
 			return
-		else:
-			raise NotImplementedError('Empty dataset not supported for effect "{}".'.format(effect))
+		raise NotImplementedError('Empty dataset not supported for effect "{}".'.format(effect)) from e
 	ndccc,ndccd,ndcdc,ndcdd=[x if x!=['*'] else list(d['dc'+y].columns) for x,y in zip([ndccc,ndccd,ndcdc,ndcdd],'cc,cd,dc,dd'.split(','))]
 	assert all(all(y in d[f'dc{x[0]}'].columns for y in x[1]) for x in {'cc':ndccc,'cd':ndccd,'dc':ndcdc,'dd':ndcdd}.items()),'At least one covariate not found in dataset.'
 
@@ -398,7 +393,7 @@ def association(diri_data:str,fo:str,diri_meta:Optional[str]=None,effect:str='li
 		assert np.isfinite(t2).all(),'Genotype PCs contain NaN or Inf.'
 		t2-=t2.mean(axis=0)
 		t2/=t2.std(axis=0)+1E-300
-		t2=pd.DataFrame(t2,index=d['dcdc'].index,columns=[f'gpc_{x+1}' for x in range(t1)])
+		t2=pd.DataFrame(t2,index=d['dcdc'].index,columns=[f'gpc_{x+1}' for x in range(ngpc)])
 		assert len(t2)==len(d['dcdc']),f'Number of genotype PCs ({len(t2)}) does not match number of donors ({len(d["dcdc"])}).'
 		d['dcdc']=pd.concat([d['dcdc'],t2],axis=1)
 		assert np.isfinite(d['dcdc'].values).all(),'Continuous donor covariates contain NaN or Inf.'
@@ -528,8 +523,6 @@ def association(diri_data:str,fo:str,diri_meta:Optional[str]=None,effect:str='li
 				fmt1=partial(fmt,[locs[0][t2],locs[1]],(d['dimg'][:dx.shape[0]][t2],d['dime'][select_e][:dy.shape[0]]),**ka2)
 				model(dx[t2],dy,dc0[:-1],dc1,ncs0,mkl,mku,dl0,ncov0,f,fmt1,dom=xi>2,subset=tsubset,**ka1)
 
-association._da=True
-
 def qvalue(diri_data:str,fi_result:str,fo_cis:str,fo_trans:str,qcut_cis:float=1,qcut_trans:float=1,isfull:bool=False,filter_trans:Optional[str]="has_cis",cisbound:int=1000000)->None:
 	"""
 	Computing q-values for sceQTL mapping with Benjamini Hochberg procedure.
@@ -601,7 +594,7 @@ def qvalue(diri_data:str,fi_result:str,fo_cis:str,fo_trans:str,qcut_cis:float=1,
 	assert len(set(d1['Gene'].tolist())-set(t2[1]))==0
 	t2=list(zip([t2[0][x] for x in d1['SNP'].tolist()],[t2[1][x] for x in d1['Gene'].tolist()]))
 	cis=find_cis(compute_locs(*t1),cisbound)
-	cis=set([tuple(x) for x in cis[:2].T])
+	cis=set(tuple(x) for x in cis[:2].T)
 	cis=np.array([x in cis for x in t2])
 	assert len(cis)==d1.shape[0]
 	d1cis=d1.iloc[cis].copy()
@@ -630,7 +623,10 @@ def qvalue(diri_data:str,fi_result:str,fo_cis:str,fo_trans:str,qcut_cis:float=1,
 	logging.info('Writing file '+fo_trans)
 	d1trans_cut.to_csv(fo_trans,sep='\t',header=True,index=False)
 
-qvalue._da=True
 
+subset._da=True
+qc._da=True
+association._da=True
+qvalue._da=True
 
 assert __name__ != "__main__", "This module is not meant to be run directly."
