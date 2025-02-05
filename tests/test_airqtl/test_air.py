@@ -205,10 +205,14 @@ class Test_air:
 		from operator import add
 		self._test_op_(add,otype='atom',**ka)
 		self._test_op_(add,otype='elem',**ka)
+		self._test_op_(torch.add,otype='atom',**ka)
+		self._test_op_(torch.add,otype='elem',**ka)
 	def test_mul(self,**ka):
 		from operator import mul
 		self._test_op_(mul,otype='atom',**ka)
 		self._test_op_(mul,otype='elem',**ka)
+		self._test_op_(torch.mul,otype='atom',**ka)
+		self._test_op_(torch.mul,otype='elem',**ka)
 	def test_matmul(self,ndims=[2,3],**ka):
 		from operator import matmul
 		self._test_op_(matmul,otype='matmul',ndims=ndims,**ka)

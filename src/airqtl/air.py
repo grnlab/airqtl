@@ -6,12 +6,12 @@
 import abc
 from collections.abc import Iterable
 from typing import Callable, Optional, Tuple, Union
+import functools
 
 from .utils.importing import torch
 
-
+@functools.total_ordering
 class base(metaclass=abc.ABCMeta):
-	HANDLED_FUNCTIONS = {}
 	@abc.abstractmethod
 	def __init__(self)->None:
 		pass
@@ -21,23 +21,45 @@ class base(metaclass=abc.ABCMeta):
 	@abc.abstractmethod
 	def tensor(self)->torch.Tensor:
 		pass
-	@classmethod
-	def __torch_function__(cls, func, types, args=(), kwargs=None):
-		if kwargs is None:
-			kwargs = {}
-		if func not in cls.HANDLED_FUNCTIONS or not all(
-			issubclass(t, (torch.Tensor,base))
-			for t in types
-		):
-			return NotImplemented
-		return cls.HANDLED_FUNCTIONS[func](*args, **kwargs)
+	@abc.abstractmethod
+	def __gt__(self,other)->bool:
+		pass
+	@abc.abstractmethod
+	def __eq__(self,other)->bool:
+		pass
 
 class air(base):
 	"""
 	Array of Interleaved Repeats
 	Using compressed form to store data with interleaved repeats
 	"""
-	HANDLED_FUNCTIONS={
+	# List of elementwise operations grouped by the number of operands
+	# Each element is a set: {pytorch function}
+	HANDLED_FUNCTIONS_elem=[
+		{
+			torch.abs,
+			torch.acos,
+			torch.asin,
+			torch.atan,
+			torch.cos,
+			torch.cosh,
+			torch.exp,
+			torch.log,
+			torch.log10,
+			torch.neg,
+			torch.sin,
+			torch.sinh,
+			torch.sqrt,
+			torch.tan,
+			torch.tanh,
+		},
+		{
+			torch.add,
+			torch.mul,
+			torch.pow,
+		},
+	]
+	HANDLED_FUNCTIONS_other={
 	}
 	def __init__(self,v:torch.Tensor,repeat:Optional[list[Optional[torch.Tensor]]])->None:
 		"""
@@ -67,7 +89,7 @@ class air(base):
 		self.n=[torch.cat([torch.tensor([0],dtype=x.dtype,device=x.device,requires_grad=False),x.cumsum(0)]) if x is not None else None for x in self.r]
 		self.shape=tuple(int(self.n[x][-1]) if self.n[x] is not None else self.v.shape[x] for x in range(self.ndim))
 	def __repr__(self)->str:
-		return "AIR(shape={}, axes={})".format(self.shape,','.join([str(x) for x in range(len(self.r)) if self.r[x] is not None]) if self.r is not None else None)
+		return "AIR(full_shape={}, air_shape={},axes={})".format(self.shape,self.v.shape,','.join([str(x) for x in range(len(self.r)) if self.r[x] is not None]) if self.r is not None else None)
 	def reduce(self,inplace:bool=False)->Union[torch.Tensor,'air']:
 		"""
 		Converts to reduced form.
@@ -224,39 +246,39 @@ class air(base):
 		if v.ndim==0:
 			return v
 		return self.__class__(v,r).reduce()
-	def op_elem(self,other:Union['air',torch.Tensor,int,float],op:Callable)->Union['air',torch.Tensor]:
+	@classmethod
+	def op_elem1(cls,func:Callable,op1:'air',*a,**ka)->'air':
 		"""
-		Elementwise operation.
+		Elementwise operation with one operand.
 		"""
-		if isinstance(other,self.__class__):
-			o1,o2=self.tofull_elem(other)
+		return cls(func(op1.v,*a,**ka),op1.r)
+	@classmethod
+	def op_elem2(cls,func:Callable,op1:Union['air',torch.Tensor,int,float],op2:Union['air',torch.Tensor,int,float],*a,**ka)->Union['air',torch.Tensor]:
+		"""
+		Elementwise operation with two operands.
+		"""
+		if not any(isinstance(x,cls) for x in [op1,op2]):
+			return NotImplemented
+		if isinstance(op1,cls) and isinstance(op2,cls):
+			o1,o2=op1.tofull_elem(op2)
 			if isinstance(o1,torch.Tensor) or isinstance(o2,torch.Tensor):
-				return op(o1,o2)
-			if isinstance(o1,self.__class__) and isinstance(o2,self.__class__):
-				ans=op(o1.v,o2.v)
-				ans=self.__class__(ans,o1.r)
+				return func(o1,o2,*a,**ka)
+			if isinstance(o1,cls) and isinstance(o2,cls):
+				ans=func(o1.v,o2.v,*a,**ka)
+				ans=cls(ans,o1.r)
 				return ans.reduce()
 			assert False
-		elif isinstance(other,torch.Tensor):
-			return op(self.tensor(),other)
-		elif isinstance(other,(int,float)):
-			return self.__class__(op(self.v,other),self.r).reduce()
+		if isinstance(op1,cls):
+			if isinstance(op2,torch.Tensor):
+				return func(op1.tensor(),op2)
+			if isinstance(op2,(int,float)):
+				return cls(func(op1.v,op2,*a,**ka),op1.r).reduce()
+		if isinstance(op2,cls):
+			if isinstance(op1,torch.Tensor):
+				return func(op1,op2.tensor(),*a,**ka)
+			if isinstance(op1,(int,float)):
+				return cls(func(op1,op2.v,*a,**ka),op2.r).reduce()
 		return NotImplemented
-	def __add__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
-		from operator import add as op
-		return self.op_elem(other,op)
-	def __mul__(self,other):
-		from operator import mul as op
-		return self.op_elem(other,op)
-	def __gt__(self,other):
-		from operator import gt as op
-		return self.op_elem(other,op)
-	def __pow__(self,other:Union[int,float])->Union['air',torch.Tensor]:
-		if not isinstance(other,(int,float)):
-			return NotImplemented
-		return self.__class__(self.v**other,self.r).reduce()
-	# def copy(self):
-	# 	raise NotImplementedError
 	def toreduce(self,method:str,axis:dict[int,torch.Tensor])->'air':
 		"""
 		Converts full form to reduced form.
@@ -292,6 +314,21 @@ class air(base):
 					v=(v.swapaxes(xi,-1)*axis[xi]).swapaxes(xi,-1)
 					changed=True
 		return self.__class__(v,r) if changed else self
+	def __add__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import add as op
+		return self.op_elem2(op,self,other)
+	def __mul__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import mul as op
+		return self.op_elem2(op,self,other)
+	def __gt__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import gt as op
+		return self.op_elem2(op,self,other)
+	def __eq__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import eq as op
+		return self.op_elem2(op,self,other)
+	def __pow__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import pow as op
+		return self.op_elem2(op,self,other)
 	def __matmul__(self,other:Union['air',torch.Tensor,'composite'])->Union['air',torch.Tensor,'composite']:
 		if isinstance(other,torch.Tensor):
 			return self@self.__class__(other,None)
@@ -325,6 +362,9 @@ class air(base):
 		return self.__add__(other)
 	def __rmul__(self,other:Union['air',torch.Tensor,float,int])->Union['air',torch.Tensor]:
 		return self.__mul__(other)
+	def __rpow__(self,other:Union['air',torch.Tensor,float,int])->Union['air',torch.Tensor]:
+		from operator import pow as op
+		return self.op_elem2(op,other,self)
 	def __rmatmul__(self,other:Union['air',torch.Tensor])->Union['air',torch.Tensor]:
 		if isinstance(other,torch.Tensor):
 			return self.__class__(other,None)@self
@@ -346,6 +386,21 @@ class air(base):
 				v=(v.swapaxes(xi,-1)*self.r[xi]).swapaxes(xi,-1).sum(axis=xi)
 		r=[self.r[x] for x in filter(lambda y:y not in axis,range(self.ndim))]
 		return self.__class__(v,r).reduce()
+	@classmethod
+	def __torch_function__(cls, func, types, args=(), kwargs={}):
+		if len(args)<=len(cls.HANDLED_FUNCTIONS_elem) and func in cls.HANDLED_FUNCTIONS_elem[len(args)-1] and any(isinstance(x, cls) for x in args):
+			if len(args)==1:
+				#Broadcasted elementwise operation
+				return cls.op_elem1(func,*args,**kwargs)
+			if len(args)==2:
+				#Elementwise operation with two operands
+				return cls.op_elem2(func,*args,**kwargs)
+		if func in cls.HANDLED_FUNCTIONS_other and any(issubclass(x, cls) for x in args):
+			#Other operations
+			return cls.HANDLED_FUNCTIONS_other[func](*args, **kwargs)
+		return NotImplemented
+
+
 
 class composite(base):
 	HANDLED_FUNCTIONS={
@@ -405,17 +460,13 @@ class composite(base):
 			return torch.cat(self.vs,dim=self.axis)
 		vs=[x.reduce() if isinstance(x,self.__class__) else x for x in self.vs]
 		vs=list(itertools.chain.from_iterable([x.vs if isinstance(x,self.__class__) and x.axis==self.axis else [x] for x in vs]))
-		changed=any(hash(x)!=hash(y) for x,y in zip(self.vs,vs))
 		ans=[vs[0]]
 		for xi in range(1,len(vs)):
 			if isinstance(ans[-1],torch.Tensor) and isinstance(vs[xi],torch.Tensor):
 				ans[-1]=torch.cat([ans[-1],vs[xi]],dim=self.axis)
-				changed=True
 			else:
 				ans.append(vs[xi])
-		if changed:
-			return (ans,self.axis)
-		return None
+		return (ans,self.axis)
 	def reduce(self,inplace:bool=False)->Union[air,torch.Tensor,'composite',None]:
 		"""
 		Simplifies the composite to a new object or in place.
@@ -558,6 +609,9 @@ class composite(base):
 		return self.op_elem(other,op)
 	def __gt__(self,other:Union[air,torch.Tensor,'composite',int,float])->Union[air,torch.Tensor,'composite']:
 		from operator import gt as op
+		return self.op_elem(other,op)
+	def __eq__(self,other:Union[air,torch.Tensor,'composite',int,float])->Union[air,torch.Tensor,'composite']:
+		from operator import eq as op
 		return self.op_elem(other,op)
 	def __pow__(self,other:Union[air,torch.Tensor,'composite',int,float])->Union[air,torch.Tensor,'composite']:
 		from operator import pow as op
