@@ -35,10 +35,6 @@ datasetfiles_subset=['dimc.txt.gz','de.tsv.gz','dd.tsv.gz','dccc.tsv.gz','dccd.t
 
 #Metadata files for each dataset
 datasetfiles_meta=[
-	#Metadata matrix
-	"dmeta.tsv.gz",
-	#Metadata JSON
-	"meta.json",
 	#Metadata for genotypes
 	"dmeta_g.tsv.gz",
 	#Metadata for genes
@@ -90,8 +86,6 @@ def empty_dataset(meta=False):
 	}
 	if meta:
 		ans.update({
-			'dmeta':pd.DataFrame(np.array([]).reshape(0,0)),
-			'meta':{},
 			'dmeta_g':pd.DataFrame(np.array([]).reshape(0,0)),
 			'dmeta_e':pd.DataFrame(np.array([]).reshape(0,0)),
 		})
@@ -147,8 +141,6 @@ def check_dataset(d,check_full='data'):
 			assert len(d[xi])==nd,f'Number of donors in {xi}={d[xi].shape[0]} does not match {nd}'
 	elif 'dcdc' in d and 'dcdd' in d:
 		assert len(d['dcdc'])==len(d['dcdd']),f'Number of donors in dcdc={d["dcdc"].shape[0]} does not match dcdd={d["dcdd"].shape[0]}'
-	assert any(x not in d for x in ['dmeta','dimc']) or len(set(d['dimc'])-set(d['dmeta'].index))==0
-
 def load_dataset_slim(d,check=True,**ka):
 	import numpy as np
 	if 'dd' not in d:
@@ -262,15 +254,6 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 			ans[xi]=pd.DataFrame(np.array([]).reshape(len(ans['dimc']) if xi[2]=='c' else len(ans['dimd']),0))
 
 	#Load metadata
-	if 'dmeta' in select:
-		fi=pjoin(meta,'dmeta.tsv.gz')
-		logging.info(f'Reading file {fi}.')
-		ans['dmeta']=pd.read_csv(fi,sep='\t',index_col=0,header=0)
-	if 'meta' in select:
-		fi=pjoin(meta,'meta.json')
-		logging.info(f'Reading file {fi}.')
-		with open(fi,'r') as f:
-			ans['meta']=json.load(f)
 	if 'dmeta_g' in select:
 		fi=pjoin(meta,'dmeta_g.tsv.gz')
 		logging.info(f'Reading file {fi}.')
@@ -328,15 +311,6 @@ def save_dataset(d,folder,foldermeta=None,check=True,**ka):
 		fo=pjoin(folder,f'{xi}.tsv.gz')
 		logging.info(f'Writing file {fo}.')
 		d[xi].to_csv(fo,sep='\t',index=False)
-	if 'dmeta' in d:
-		fo=pjoin(foldermeta,'dmeta.tsv.gz')
-		logging.info(f'Writing file {fo}.')
-		d['dmeta'].to_csv(fo,sep='\t',index=True)
-	if 'meta' in d:
-		fo=pjoin(foldermeta,'meta.json')
-		logging.info(f'Writing file {fo}.')
-		with open(fo,'w') as f:
-			json.dump(d['meta'],f)
 	if 'dmeta_g' in d:
 		fo=pjoin(foldermeta,'dmeta_g.tsv.gz')
 		logging.info(f'Writing file {fo}.')
@@ -441,8 +415,6 @@ def filter_any(d,select,arr1,arr2,df1,df2,check={}):
 
 def filter_cells(d0,select,**ka):
 	d=filter_any(d0,select,['dimc','dd'],['de'],['dccc','dccd'],[],check=None)
-	if 'dmeta' in d and 'dimc' in d:
-		d['dmeta']=d['dmeta'].loc[d['dimc']]
 	if 'check' not in ka or ka['check'] is not None:
 		check_dataset(d,**ka)
 	return d

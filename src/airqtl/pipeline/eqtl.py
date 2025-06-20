@@ -609,9 +609,15 @@ def qvalue(diri_data:str,fi_result:str,fo_cis:str,fo_trans:str,qcut_cis:float=1,
 		d1trans=d1trans[t1[0]&t1[1]].copy()
 
 	#Compute q-values with BH procedure separately for cis and trans associations
-	d1cis['q']=bh(d1cis['p'].values)
-	ka={} if isfull else {'size':sizes[0]*sizes[1]-d1cis.shape[0]}
-	d1trans['q']=bh(d1trans['p'].values,**ka)
+	if len(d1cis)>0:
+		d1cis['q']=bh(d1cis['p'].values)
+	else:
+		d1cis['q']=np.nan
+	if len(d1trans)>0:
+		ka={} if isfull else {'size':sizes[0]*sizes[1]-d1cis.shape[0]}
+		d1trans['q']=bh(d1trans['p'].values,**ka)
+	else:
+		d1trans['q']=np.nan
 
 	#Applying q-value cutoff
 	d1cis_cut=d1cis[d1cis['q']<qcut_cis].copy() if qcut_cis is not None else d1cis

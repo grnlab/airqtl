@@ -7,7 +7,7 @@
 Command-line interface for airqtl.
 """
 
-__all__ = ['cgrn','dataset','eqtl']
+__all__ = ['cgrn','dataset','eqtl','utils']
 
 from . import *
 
