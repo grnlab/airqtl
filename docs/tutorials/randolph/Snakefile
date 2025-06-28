@@ -14,14 +14,17 @@ from airqtl.pipeline import dataset
 pdir=partial(pjoin,dirbase)
 ldir=partial(pjoin,dirlbase)
 #Target files for each step & run
-target1_raw=dataset.datasetfiles_data+dataset.datasetfiles_meta
+assert all(len(x)==1 or all(y.startswith('de.') for y in x) for x in dataset.datasetfiles_data)
+target1_raw_download=[x[0] for x in dataset.datasetfiles_data]+dataset.datasetfiles_meta
+target1_raw_input=list(dataset.datasetfiles_data)+[[x] for x in dataset.datasetfiles_meta]
 target1_subset=dataset.datasetfiles_subset
-target1_qc=dataset.datasetfiles_data+dataset.datasetfiles_meta
+target1_qc=[x[0] for x in dataset.datasetfiles_data]+dataset.datasetfiles_meta
 target1_association=['result.tsv.lz4']
 target1_qvalue=[f'{x}.tsv.gz' for x in ['cis','trans']]
 #All targets for each step
-targets_raw=[pdir('raw',x) for x in target1_raw]
-targets=list(targets_raw)
+targets_raw_download=[pdir('raw',x) for x in target1_raw_download]
+targets_raw_input=[[pdir('raw',y) for y in x] for x in target1_raw_input]
+targets=[]
 targets_subset=[]
 targets_qc=[]
 targets_association=[]
@@ -46,7 +49,7 @@ try:
 	targets_merge=[pdir('merge.tsv.gz')]
 	targets+=targets_subset+targets_qc+targets_association+targets_qvalue+targets_mr+targets_merge
 except FileNotFoundError:
-	pass
+	targets+=targets_raw_download
 
 if covs=='all':
 	params_association+=" --ndccc '*' --ndccd '*' --ndcdc '*' --ndcdd '*'"
@@ -65,7 +68,7 @@ rule all:
 
 rule raw:
 	output:
-		targets_raw
+		targets_raw_download
 	shell:
 		"""
 		set -eo pipefail
@@ -76,9 +79,21 @@ rule raw:
 		rm raw.tar
 		"""
 
+def subset_input(w):
+	from os.path import isfile
+	t1=[[isfile(y) for y in x] for x in targets_raw_input]
+	t1=[[y for y,z in zip(*x) if z] for x in zip(targets_raw_input,t1)]
+	t2=[x for x in range(len(t1)) if len(t1[x])==0]
+	if len(t2)>0:
+		raise ValueError('Found missing input files: {}'.format(', '.join([str(targets_raw_input[x]) for x in t2])))
+	t2=list(filter(lambda x:len(x)>1,t1))
+	if len(t2)>0:
+		raise ValueError('Found duplicate input files: {}'.format(', '.join([str(x) for x in t2])))
+	return [x[0] for x in t1]
+
 rule subset:
 	input:
-		targets_raw
+		subset_input
 	output:
 		[pdir('subset','{subset}',f'{x}') for x in target1_subset]
 	log:
@@ -88,10 +103,10 @@ rule subset:
 		mkdir -p "$(dirname "{output[0]}")" "$(dirname "{log}")"
 		python3 -m airqtl {param0} eqtl subset {params_subset} "$(dirname "{input[0]}")" "$(dirname "{output[0]}")" '{subset_covs_values[0]}' '{subset_covs_values[1]}' {wildcards.subset} &> "{log}"
 		"""
-		
+
 rule qc:
 	input:
-		[pdir('subset','{subset}',f'{x}') for x in target1_subset]+targets_raw
+		lambda w: [pdir('subset',w.subset,f'{x}') for x in target1_subset]+subset_input(w)
 	output:
 		[pdir('qc','{subset}',f'{x}') for x in target1_qc]
 	log:
@@ -100,9 +115,9 @@ rule qc:
 		"""
 		set -eo pipefail
 		mkdir -p "$(dirname "{output[0]}")" "$(dirname "{log}")"
-		python3 -m airqtl {param0} eqtl qc --diri_raw "$(dirname "{targets_raw[0]}")" {params_qc} "$(dirname "{input[0]}")" "$(dirname "{output[0]}")" &> "{log}"
+		python3 -m airqtl {param0} eqtl qc --diri_raw "$(dirname "{targets_raw_input[0]}")" {params_qc} "$(dirname "{input[0]}")" "$(dirname "{output[0]}")" &> "{log}"
 		"""+"""
-		""".join(['cp "$(dirname "{targets_raw[0]}")/'+x+'" "$(dirname "{output[0]}")/"' for x in dataset.datasetfiles_meta])
+		""".join(['cp "$(dirname "{targets_raw_input[0]}")/'+x+'" "$(dirname "{output[0]}")/"' for x in dataset.datasetfiles_meta])
 
 rule association:
 	input:

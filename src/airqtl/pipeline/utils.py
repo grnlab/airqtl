@@ -68,7 +68,7 @@ def _convert_anndata_covar(h5ad,covariates:str,donor_array,nc,covar_type):
 	covariates=[_convert_anndata_covar_rename(c) for c in covariates]
 	return pd.DataFrame(np.array(cov_list).T,columns=covariates)
 
-def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',ndd:str='')->None:
+def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',ndd:str='',mtx:bool=False)->None:
 	"""
 	Convert AnnData h5ad file to input format for airqtl.
 	
@@ -90,6 +90,8 @@ def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',n
 		Comma separated column names in obs of h5ad file to be used as donor-level continuous covariates for dcdc.tsv.gz
 	ndd:
 		Comma separated column names in obs of h5ad file to be used as donor-level discrete covariates for dcdd.tsv.gz
+	mtx:
+		Whether to convert the expression matrix to mtx format. If True, the expression matrix will be converted to mtx format. If False, the expression matrix will be converted to tsv format.
 	"""
 	import gzip
 	import logging
@@ -101,7 +103,8 @@ def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',n
 	import h5py
 	import numpy as np
 	import pandas as pd
-	from scipy.sparse import csr_matrix
+	from scipy.io import mmwrite
+	from scipy.sparse import csr_array
 
 	with h5py.File(fi, "r") as h5ad:
 		if donor not in h5ad['obs']:
@@ -141,16 +144,22 @@ def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',n
 		with gzip.open(fo,"wt") as f:
 			f.write(linesep.join([str(x) for x in donor_array]))
 
-		fo=pjoin(diro,"de.tsv.gz")
+		#de.tsv.gz or de.mtx.gz
 		if any(x not in h5ad['X'] for x in ['data','indices','indptr']):
 			raise ValueError(f"X matrix in h5ad file is not in CSR format")
 		data = h5ad['X']['data'][:]
 		indices = h5ad['X']['indices'][:]
 		indptr = h5ad['X']['indptr'][:]
-		e_matrix = csr_matrix((data, indices, indptr), shape=(len(cells), len(genes)))
-		e_array = e_matrix.toarray().astype(int).T
-		logging.info(f"Writing {fo}")
-		pd.DataFrame(e_array).to_csv(fo,index=False,sep="\t",header=False)
+		e_array = csr_array((data, indices, indptr), shape=(len(cells), len(genes))).astype(int)
+		if mtx:
+			fo=pjoin(diro,"de.mtx.gz")
+			logging.info(f"Writing {fo}")
+			with gzip.open(fo,"wb") as f:
+				mmwrite(f,e_array,symmetry='general')
+		else:
+			fo=pjoin(diro,"de.tsv.gz")
+			logging.info(f"Writing {fo}")
+			pd.DataFrame(e_array.toarray().T).to_csv(fo,index=False,sep="\t",header=False)
 
 		if any(x in ncc+ncd+ndc+ndd for x in [' ','/','\\']):
 			logging.warning(f"Space, slash, or backslash found in covariate names. These will be replaced with underscore.")

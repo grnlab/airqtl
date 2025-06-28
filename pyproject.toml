@@ -2,8 +2,9 @@
 name = "airqtl"
 version = "0.1.1"
 authors = [
-  { name="Lingfei Wang", email="Lingfei.Wang.github@outlook.com" },
-  { name="Matthew Funk", email="Matthew.Funk1@umassmed.edu" },
+	{ name="Lingfei Wang", email="Lingfei.Wang.github@outlook.com" },
+	{ name="Matthew Funk"},
+	{ name="Yuhe Wang"},
 ]
 description = "Array of Interleaved Repeats for Quantitative Trait Loci"
 readme = "README.rst"

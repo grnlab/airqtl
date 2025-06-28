@@ -21,7 +21,7 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 	Parameters
 	------------
 	diri:
-		Path of input directory of pre-subset dataset
+		Path of input directory of pre-subset dataset. Accepts de.tsv.gz or de.mtx.gz for expression read count matrix.
 	diro:
 		Path of output directory of post-subset dataset
 	covc:
@@ -35,6 +35,7 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 	"""
 
 	import numpy as np
+	import scipy.sparse
 
 	from . import dataset as plib
 
@@ -61,7 +62,7 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 		#No cell, return empty dataset
 		d2={
 			'dimc':d['dimc'][[]],
-			'de':d['de'][:,[]],
+			'de':np.zeros((d['de'].shape[0],0),dtype=d['de'].dtype),
 			'dd':d['dd'][[]],
 			'dccc':d['dccc'].iloc[[]][[]],
 			'dccd':d['dccd'].iloc[[]][[]],
@@ -84,13 +85,19 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 	#Check and save dataset
 	d2={
 		'dimc':d['dimc'][coveq],
-		'de':d['de'][:,coveq],
 		'dd':d['dd'][coveq],
 		'dccc':dccc,
 		'dccd':dccd,
 		'dcdd':dcdd,
 		'dcdc':d['dcdc'],
 	}
+	if isinstance(d['de'],np.ndarray):
+		d2['de']=d['de'][:,coveq]
+	elif isinstance(d['de'],scipy.sparse.sparray):
+		d2['de']=d['de'].tocsc()[:,coveq].toarray()
+	else:
+		raise ValueError(f'Unknown expression matrix type: {type(d["de"])}')
+	
 	if rmcov:
 		d2['dcdc']=d2['dcdc'][[]]
 	d.update(d2)
@@ -163,7 +170,7 @@ def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,ee
 			d=plib.load_dataset(diri)
 		else:
 			t1=['dimc','de','dd','dccc','dccd','dcdd']
-			d=plib.load_dataset(None,select={diri_raw:list(set(x.split('.')[0] for x in plib.datasetfiles_data)-set(t1)),diri:t1},check=False)
+			d=plib.load_dataset(None,select={diri_raw:list(set(x[0].split('.')[0] for x in plib.datasetfiles_data)-set(t1)),diri:t1},check=False)
 	except plib.EmptyDatasetError:
 		logging.info('Empty dataset. Writing empty file '+diro)
 		plib.save_dataset(plib.empty_dataset(),diro)

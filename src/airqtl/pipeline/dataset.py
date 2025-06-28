@@ -2,35 +2,37 @@
 # Copyright 2025, Lingfei Wang
 #
 # This file is part of airqtl.
+import itertools
 
-#Essential dataset files
+#Essential dataset files. Only one in each tuple is needed.
 datasetfiles_data=[
 	#Donor names, one line each
-	"dimd.txt.gz",
+	("dimd.txt.gz",),
 	#Cell names, one line each
-	"dimc.txt.gz",
+	("dimc.txt.gz",),
 	#Gene names, one line each
-	"dime.txt.gz",
+	("dime.txt.gz",),
 	#Genotype names, one line each
-	"dimg.txt.gz",
+	("dimg.txt.gz",),
 	#Genotype matrix, genotype x raw donor
-	"dg.tsv.gz",
-	#Expression matrix, gene x cell
-	"de.tsv.gz",
+	("dg.tsv.gz",),
+	#Expression matrix, gene x cell, or in mtx format at cell x gene
+	("de.tsv.gz","de.mtx.gz"),
 	#Donor ID for each cell, one line each
-	"dd.tsv.gz",
+	("dd.tsv.gz",),
 	#Continuous cell covariates, cell x covariate
-	"dccc.tsv.gz",
+	("dccc.tsv.gz",),
 	#Discrete cell covariates, cell x covariate
-	"dccd.tsv.gz",
+	("dccd.tsv.gz",),
 	#Continuous donor covariates, donor x covariate
-	"dcdc.tsv.gz",
+	("dcdc.tsv.gz",),
 	#Discrete donor covariates, donor x covariate
-	"dcdd.tsv.gz",
+	("dcdd.tsv.gz",),
 	#Donor to raw donor map, one line for each donor
-	"dgmap.tsv.gz",
+	("dgmap.tsv.gz",),
 ]
-#Cell subsetting files
+assert all(len(set(y.split('.')[0] for y in x))==1 for x in datasetfiles_data),'Duplicate dataset file names found'
+datasetfiles_data_all=list(itertools.chain.from_iterable(datasetfiles_data))
 datasetfiles_subset=['dimc.txt.gz','de.tsv.gz','dd.tsv.gz','dccc.tsv.gz','dccd.tsv.gz','dcdd.tsv.gz']
 
 #Metadata files for each dataset
@@ -57,8 +59,7 @@ datasetfiles_truth=[
 	"tnettot.tsv.gz",
 ]
 
-assert len(set([x.split('.')[0] for x in datasetfiles_data+datasetfiles_meta+datasetfiles_truth]))==len(datasetfiles_data)+len(datasetfiles_meta)+len(datasetfiles_truth),'Duplicate dataset file names found'
-assert len(set(datasetfiles_subset)-set(datasetfiles_data))==0,f'Unknown dataset files: {set(datasetfiles_subset)-set(datasetfiles_data)}'
+assert len(set([x.split('.')[0] for x in datasetfiles_data_all+datasetfiles_meta+datasetfiles_truth]))==len(datasetfiles_data)+len(datasetfiles_meta)+len(datasetfiles_truth),'Duplicate dataset file names found'
 
 class EmptyDatasetError(ValueError):
 	pass
@@ -93,24 +94,23 @@ def empty_dataset(meta=False):
 
 def check_dataset(d,check_full='data'):
 	#Check fullness
-	tsetd,tsetm=[set(x.split('.')[0] for x in y) for y in [datasetfiles_data,datasetfiles_meta]]
+	assert check_full in ['data','data_only','meta','meta_only','all','none'],f'Unknown check_full value: {check_full}'
+	tsetd=[set(x.split('.')[0] for x in y) for y in datasetfiles_data]
+	tsetd_all,tsetm=[set(x.split('.')[0] for x in y) for y in [datasetfiles_data_all,datasetfiles_meta]]
 	dset=set(d)
-	assert len(dset-tsetd-tsetm)==0,f'Unknown dataset files: {dset-tsetd-tsetm}'
-	if check_full=='data':
-		assert len(tsetd-dset)==0,f'Missing dataset files: {tsetd-dset}'
-	elif check_full=='data_only':
-		assert len(tsetd-dset)==0 and len(dset-tsetd)==0,f'Missing/unknown dataset files: {(dset-tsetd)|(tsetd-dset)}'
-	elif check_full=='meta':
+	assert len(dset-tsetd_all-tsetm)==0,f'Unknown dataset files: {dset-tsetd_all-tsetm}'
+
+	if check_full in ['data','data_only','all']:
+		t1=[len(x&dset)!=1 for x in tsetd]
+		assert not any(t1),'Missing/duplicate dataset files: {}'.format(', '.join([str(tsetd[x]) for x in range(len(t1)) if t1[x]]))
+	if check_full in ['meta','meta_only','all']:
 		assert len(tsetm-dset)==0,f'Missing dataset files: {tsetm-dset}'
-	elif check_full=='meta_only':
-		assert len(tsetm-dset)==0 and len(dset-tsetm)==0,f'Missing/unknown dataset files: {(dset-tsetm)|(tsetm-dset)}'
-	elif check_full=='all':
-		assert len((tsetd|tsetm)-dset)==0,f'Missing dataset files: {(tsetd|tsetm)-dset}'
-	elif check_full=='none':
-		pass
-	else:
-		raise ValueError(f'Unknown check_full value: {check_full}')
-	
+	if check_full in ['data_only']:
+		t1=[len(x&dset)==0 for x in tsetd]
+		assert len(dset-tsetd_all)==0,f'Unknown dataset files: {dset-tsetd_all}'
+	elif check_full in ['meta_only']:
+		assert len(dset-tsetm)==0,f'Unknown dataset files: {dset-tsetm}'
+
 	#Check individual variables
 	nd,nc,ne,ng=[len(d['dim'+x]) if 'dim'+x in d else None for x in ['d','c','e','g']]
 	if any(x==0 for x in [nd,nc,ne,ng]) or ('dg' in d and d['dg'].shape[1]==0):
@@ -141,6 +141,7 @@ def check_dataset(d,check_full='data'):
 			assert len(d[xi])==nd,f'Number of donors in {xi}={d[xi].shape[0]} does not match {nd}'
 	elif 'dcdc' in d and 'dcdd' in d:
 		assert len(d['dcdc'])==len(d['dcdd']),f'Number of donors in dcdc={d["dcdc"].shape[0]} does not match dcdd={d["dcdd"].shape[0]}'
+		
 def load_dataset_slim(d,check=True,**ka):
 	import numpy as np
 	if 'dd' not in d:
@@ -179,13 +180,14 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 	"""
 	import gzip
 	import itertools
-	import json
 	import logging
 	from os.path import isfile
 	from os.path import join as pjoin
 
 	import numpy as np
 	import pandas as pd
+	import scipy.io
+
 	from ..utils.numpy import smallest_dtype_int
 
 	if isinstance(select,dict):
@@ -202,25 +204,27 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 		# 	check_dataset(ans,**ka)
 		return ans
 	if select is None:
-		select=datasetfiles_data
+		select=list(datasetfiles_data)
 		if meta is not None:
 			select+=datasetfiles_meta
-		select=[x.split('.')[0] for x in select]
 	if not isinstance(select,list):
 		raise ValueError(f'Unknown select type: {type(select)}')
-	select=set(select)
-	for f in set(datasetfiles_data)&select:
-		assert isfile(pjoin(folder,f)),f'{f} not found'
-	assert meta is None or len(set(datasetfiles_meta)&select)==0
-	for f in set(datasetfiles_meta)&select:
-		assert isfile(pjoin(meta,f)),f'{f} not found'
-	tset=set(x.split('.')[0] for x in datasetfiles_data+datasetfiles_meta)
-	assert len(select-tset)==0,f'Unknown variables: {select-tset}'
+	select=[(x,) if isinstance(x,str) else x for x in select]
+	select=[[y.split('.')[0] for y in x] for x in select]
+	select_set=set(itertools.chain.from_iterable(select))
+	
+	for f in [list(filter(lambda x:x in datasetfiles_data_all,y)) for y in select]:
+		assert len(f)==0 or any(all(isfile(pjoin(folder,y)) for y in filter(lambda z:z.startswith(x),datasetfiles_data_all)) for x in f),f'{f} not found'
+	assert meta is None or len(set(datasetfiles_meta)&select_set)==0
+	for f in set([x.split('.')[0] for x in datasetfiles_meta])&set(itertools.chain.from_iterable(select)):
+		assert all(isfile(pjoin(meta,y)) for y in filter(lambda z:z.startswith(f),datasetfiles_meta)),f'{f} not found'
+	t1=select_set-set(x.split('.')[0] for x in datasetfiles_data_all+datasetfiles_meta)
+	assert len(t1)==0,f'Unknown variables: {t1}'
 
 	logging.info(f'Loading dataset from folder {folder}')
 	ans={}
 	#Load dimensions
-	for xi in set(['dimd','dimc','dime','dimg'])&select:
+	for xi in set(['dimd','dimc','dime','dimg'])&select_set:
 		fi=pjoin(folder,xi+'.txt.gz')
 		logging.info(f'Reading file {fi}.')
 		with gzip.open(fi,'rt') as f:
@@ -233,19 +237,28 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 
 	#Load expression, genotype matrices, donor ID and donor map
 	for xi,dtype in [('de','u4'),('dg','i1'),('dd','u4'),('dgmap','u4')]:
-		if xi not in select:
+		if xi not in select_set:
 			continue
-		fi=pjoin(folder,xi+'.tsv.gz')
-		logging.info(f'Reading file {fi}.')
-		with gzip.open(fi,'rt') as f:
-			ans1=np.loadtxt(f,dtype=dtype,delimiter='\t')
+		fis=[pjoin(folder,x) for x in datasetfiles_data_all if x.startswith(xi+'.')]
+		fis=list(filter(isfile,fis))
+		if len(fis)==0:
+			raise FileNotFoundError(f'No file found for {xi}')
+		assert len(fis)==1,f'Multiple files found for {xi}: {fis}'
+		logging.info(f'Reading file {fis[0]}.')
+		with gzip.open(fis[0],'rt') as f:
+			if fis[0].endswith('.mtx.gz'):
+				ans1=scipy.io.mmread(fis[0],spmatrix=False).T.astype(dtype)
+			elif fis[0].endswith('.tsv.gz'):
+				ans1=np.loadtxt(f,dtype=dtype,delimiter='\t')
+			else:
+				raise ValueError(f'Unknown file type: {fis[0]}')
 		ans1=smallest_dtype_int(ans1)
 		ans[xi]=ans1
 	if 'dg' in ans and ans['dg'].shape[1]==0:
 		raise EmptyDatasetError('Empty dataset with no raw donor')
 
 	#Load covariates
-	for xi in set(['dccc','dccd','dcdc','dcdd'])&select:
+	for xi in set(['dccc','dccd','dcdc','dcdd'])&select_set:
 		fi=pjoin(folder,xi+'.tsv.gz')
 		logging.info(f'Reading file {fi}.')
 		try:
@@ -254,11 +267,11 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 			ans[xi]=pd.DataFrame(np.array([]).reshape(len(ans['dimc']) if xi[2]=='c' else len(ans['dimd']),0))
 
 	#Load metadata
-	if 'dmeta_g' in select:
+	if 'dmeta_g' in select_set:
 		fi=pjoin(meta,'dmeta_g.tsv.gz')
 		logging.info(f'Reading file {fi}.')
 		ans['dmeta_g']=pd.read_csv(fi,sep='\t',index_col=0,header=0)
-	if 'dmeta_e' in select:
+	if 'dmeta_e' in select_set:
 		fi=pjoin(meta,'dmeta_e.tsv.gz')
 		logging.info(f'Reading file {fi}.')
 		ans['dmeta_e']=pd.read_csv(fi,sep='\t',index_col=0,header=0)
@@ -281,7 +294,6 @@ def save_dataset(d,folder,foldermeta=None,check=True,**ka):
 	ka:			Keyword arguments to pass to check_dataset
 	"""
 	import gzip
-	import json
 	import logging
 	from os import linesep
 	from os.path import join as pjoin
