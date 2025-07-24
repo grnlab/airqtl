@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright 2025, Lingfei Wang
+# Copyright 2025, Lingfei Wang and Yuhe Wang
 #
 # This file is part of airqtl.
 
@@ -49,9 +49,9 @@ class Test_air:
 		shape:		Full shape of tensor.
 		repeat:		The repeat for air for each dimension. Each entry for one dimension can be:
 			True:	Indicating the repeat should be generated with gen_repeat
-			None:	Indicating the repeat once for each element
+			None or False:	Indicating the repeat once for each element
 			torch.Tensor:	Indicating the number of repeats for each element
-					If repeat is None, indicating a list of Trues for each dimension.
+			If repeat is None, indicating a list of Trues for each dimension.
 		return_repeat:	Indicating whether to return repeat
 		p:			Parameters. See pa.
 		Return:
@@ -63,10 +63,10 @@ class Test_air:
 		if repeat is None:
 			repeat=[True]*n
 		assert len(repeat)==n
-		assert all(repeat[x] in {None,True} or repeat[x].sum()==shape[x] for x in range(n))
+		assert all(repeat[x] in {None,True,False} or repeat[x].sum()==shape[x] for x in range(n))
 		if any(isinstance(x,bool) and x for x in repeat):
 			t1=Test_air.gen_repeat(shape,p)
-			repeat=[t1[x] if isinstance(repeat[x],bool) and repeat[x] else repeat[x] for x in range(n)]
+			repeat=[t1[x] if isinstance(repeat[x],bool) and repeat[x] else (None if repeat[x] is False else repeat[x]) for x in range(n)]
 		assert all(repeat[x] is None or repeat[x].sum()==shape[x] for x in range(n))
 		assert len(repeat)==n
 		shape1=[shape[x] if repeat[x] is None else len(repeat[x]) for x in range(n)]
@@ -144,6 +144,7 @@ class Test_air:
 			'matmul':	Matrix multiplication
 		ndims:	Number of dimensions to test
 		n:		Number of random tests in each case
+		unlimited:	Do not limit the other operand's repeat pattern. Actual limit depends on otype.
 		"""
 		import itertools
 		assert otype!='matmul' or 1 not in ndims
@@ -222,6 +223,17 @@ class Test_air:
 		return self.test_mul(unlimited=True,n=200,**ka)
 	def test_matmul_unlimited(self,**ka):
 		return self.test_matmul(unlimited=True,n=200,**ka)
+	def test_svd(self, ndims=[2], sizes=[2,3,5,10,30], n=500, **ka):
+		import itertools
+		for ndim,_ in itertools.product(ndims,range(n)):
+			shape = tuple(np.random.choice(sizes,ndim))
+			repeat=np.random.rand(ndim)<0.5
+			d1, d0 = self.gen_data(shape,repeat=repeat,**ka) 
+			mku, mkl, mkvt = d1.svd() # Perform eigenvalue decomposition on reduced form
+			reconstructed_mk = mku@ torch.diag(mkl) @ mkvt
+			if isinstance(reconstructed_mk,air.air):
+				reconstructed_mk=reconstructed_mk.tensor()
+			assert torch.allclose(reconstructed_mk, d0, atol=1e-6), "Reconstructed matrix does not match the original."
 
 
 pc={
@@ -374,7 +386,7 @@ class Test_composite:
 		"""
 		import itertools
 		assert otype!='matmul' or 1 not in ndims
-		for ndim,nid in itertools.product(ndims,range(n)):
+		for ndim,_ in itertools.product(ndims,range(n)):
 			if otype=='atom':
 				shape=tuple(np.random.choice(sizes,ndim))
 				if all(x==1 for x in shape):

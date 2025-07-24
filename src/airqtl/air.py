@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright 2025, Lingfei Wang
+# Copyright 2025, Lingfei Wang and Yuhe Wang
 #
 # This file is part of airqtl.
 
@@ -371,6 +371,36 @@ class air(base):
 		if isinstance(other,self.__class__):
 			return other.__matmul__(self)
 		return NotImplemented
+	def svd(self, full_matrices:bool=False, out=None,driver=None)->Union[torch.Tensor, 'air']:
+		"""
+    	Computes eigenvalues and eigenvectors for the full (per-sample) kinship matrix
+    	using PyTorch only.
+    	"""
+		from functools import partial
+		if full_matrices:
+			raise NotImplementedError('Full matrices not supported.')
+		if out is not None:
+			raise NotImplementedError('out not supported.')
+		if self.v.ndim != 2:
+			raise ValueError('SVD for matrices with !=2 dimensions is not supported.')
+
+		func=partial(torch.linalg.svd,full_matrices=False,driver=driver)
+     	#non-compressed matrix can't accelerate
+		if all(x is None for x in self.r):
+			return func(self.v)
+
+		temp_repeat=[1 if self.r[x] is None else self.r[x] for x in range(len(self.v.shape))]
+		#compressed matrix can be accelerated
+
+		scaled = ((self.v * (torch.sqrt(temp_repeat[1]))).T * (torch.sqrt(temp_repeat[0]))).T
+		U, S, VT = func(scaled)
+
+		return (
+			self.__class__((U.T / (torch.sqrt(temp_repeat[0]))).T,[self.r[0],None]), 
+   			S, 
+      		self.__class__(VT / (torch.sqrt(temp_repeat[1])), [None, self.r[1]]),
+		)
+
 	def sum(self,axis:Union[int,list[int],None]=None)->Union[torch.Tensor,'air']:
 		"""
 		Sums along axis.
