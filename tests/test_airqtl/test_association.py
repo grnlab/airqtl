@@ -17,6 +17,7 @@ torch.manual_seed(12345)
 np.random.seed(12345)
 torch.use_deterministic_algorithms(True)
 torch.set_default_device(device)
+ntests=500
 
 class Test_multi:
 	@staticmethod
@@ -148,7 +149,7 @@ class Test_multi:
 				airqtl.association.multi(dx,dy,dc[:-1],dc[[-1]],ncs,mkl,mku,l0,lambda x,c:c.reshape(1,c.shape[0],c.shape[1]).expand(x.shape[0],c.shape[0],c.shape[1]),lambda x,c:x.reshape(x.shape[0],1,x.shape[1]),1,f,fmt,device=device,bsx=xi[0],bsy=xi[1])
 				ans.append(f.getvalue())
 		self.cmp_output(ans,nol0=l0 is None)
-	def test_1(self,n=500):
+	def test_1(self,n=ntests):
 		import itertools
 
 		import numpy as np

@@ -6,11 +6,9 @@
 import abc
 from collections.abc import Iterable
 from typing import Callable, Optional, Tuple, Union
-import functools
 
 from .utils.importing import torch
 
-@functools.total_ordering
 class base(metaclass=abc.ABCMeta):
 	@abc.abstractmethod
 	def __init__(self)->None:
@@ -20,12 +18,6 @@ class base(metaclass=abc.ABCMeta):
 		pass
 	@abc.abstractmethod
 	def tensor(self)->torch.Tensor:
-		pass
-	@abc.abstractmethod
-	def __gt__(self,other)->bool:
-		pass
-	@abc.abstractmethod
-	def __eq__(self,other)->bool:
 		pass
 
 class air(base):
@@ -55,10 +47,28 @@ class air(base):
 		},
 		{
 			torch.add,
+			torch.sub,
+			torch.div,
 			torch.mul,
 			torch.pow,
+			torch.gt,
+			torch.eq,
+			torch.lt,
+			torch.le,
+			torch.ge,
+			torch.ne,
 		},
 	]
+	#List of aggregation functions
+	#Each element is a tuple: (pytorch function for aggregation, pytorch function for multicounting method of aggregation)
+	HANDLED_FUNCTIONS_agg={
+		torch.sum:torch.mul,
+		torch.prod:torch.pow,
+	}
+	#List of atom functions whose torch function is handled by the object's own function under the same name
+	HANDLED_FUNCTIONS_atom={
+		torch.mean,
+	}
 	HANDLED_FUNCTIONS_other={
 	}
 	def __init__(self,v:torch.Tensor,repeat:Optional[list[Optional[torch.Tensor]]])->None:
@@ -87,7 +97,7 @@ class air(base):
 		self.dtype=self.v.dtype
 		self.ndim=self.v.ndim
 		self.n=[torch.cat([torch.tensor([0],dtype=x.dtype,device=x.device,requires_grad=False),x.cumsum(0)]) if x is not None else None for x in self.r]
-		self.shape=tuple(int(self.n[x][-1]) if self.n[x] is not None else self.v.shape[x] for x in range(self.ndim))
+		self.shape=torch.Size((int(self.n[x][-1]) if self.n[x] is not None else self.v.shape[x] for x in range(self.ndim)))
 	def __repr__(self)->str:
 		return "AIR(full_shape={}, air_shape={},axes={})".format(self.shape,self.v.shape,','.join([str(x) for x in range(len(self.r)) if self.r[x] is not None]) if self.r is not None else None)
 	def reduce(self,inplace:bool=False)->Union[torch.Tensor,'air']:
@@ -267,7 +277,7 @@ class air(base):
 				ans=func(o1.v,o2.v,*a,**ka)
 				ans=cls(ans,o1.r)
 				return ans.reduce()
-			assert False
+			assert False, "air.tofull_elem not functioning as expected."
 		if isinstance(op1,cls):
 			if isinstance(op2,torch.Tensor):
 				return func(op1.tensor(),op2)
@@ -314,21 +324,78 @@ class air(base):
 					v=(v.swapaxes(xi,-1)*axis[xi]).swapaxes(xi,-1)
 					changed=True
 		return self.__class__(v,r) if changed else self
+	def __neg__(self)->Union['air',torch.Tensor]:
+		return self.__class__(-self.v,self.r).reduce()
+	def __invert__(self)->Union['air',torch.Tensor]:
+		return self.__class__(~self.v,self.r).reduce()
+	def __abs__(self)->Union['air',torch.Tensor]:
+		return self.__class__(torch.abs(self.v),self.r).reduce()
 	def __add__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
 		from operator import add as op
+		return self.op_elem2(op,self,other)
+	def __sub__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import sub as op
 		return self.op_elem2(op,self,other)
 	def __mul__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
 		from operator import mul as op
 		return self.op_elem2(op,self,other)
-	def __gt__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
-		from operator import gt as op
+	def __truediv__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import truediv as op
 		return self.op_elem2(op,self,other)
-	def __eq__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
-		from operator import eq as op
+	def __floordiv__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import floordiv as op
+		return self.op_elem2(op,self,other)
+	def __mod__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import mod as op
+		return self.op_elem2(op,self,other)
+	def __divmod__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import divmod as op
 		return self.op_elem2(op,self,other)
 	def __pow__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
 		from operator import pow as op
 		return self.op_elem2(op,self,other)
+	def __gt__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import gt as op
+		return self.op_elem2(op,self,other)
+	def __lt__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import lt as op
+		return self.op_elem2(op,self,other)
+	def __le__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import le as op
+		return self.op_elem2(op,self,other)
+	def __ge__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import ge as op
+		return self.op_elem2(op,self,other)
+	def __ne__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import ne as op
+		return self.op_elem2(op,self,other)
+	def __eq__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import eq as op
+		return self.op_elem2(op,self,other)
+	def __radd__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import add as op
+		return self.op_elem2(op,other,self)
+	def __rsub__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import sub as op
+		return self.op_elem2(op,other,self)
+	def __rmul__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import mul as op
+		return self.op_elem2(op,other,self)
+	def __rtruediv__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import truediv as op
+		return self.op_elem2(op,other,self)
+	def __rfloordiv__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import floordiv as op
+		return self.op_elem2(op,other,self)
+	def __rmod__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import mod as op
+		return self.op_elem2(op,other,self)
+	def __rdivmod__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import divmod as op
+		return self.op_elem2(op,other,self)
+	def __rpow__(self,other:Union['air',torch.Tensor,int,float])->Union['air',torch.Tensor]:
+		from operator import pow as op
+		return self.op_elem2(op,other,self)
 	def __matmul__(self,other:Union['air',torch.Tensor,'composite'])->Union['air',torch.Tensor,'composite']:
 		if isinstance(other,torch.Tensor):
 			return self@self.__class__(other,None)
@@ -358,13 +425,6 @@ class air(base):
 			r=([self.r[x] for x in range(self.ndim-2)] if self.ndim>other.ndim else [other.r[x] for x in range(other.ndim-2)])+[self.r[-2],other.r[-1]]
 			return self.__class__(v,r).reduce()
 		return NotImplemented
-	def __radd__(self,other:Union['air',torch.Tensor,float,int])->Union['air',torch.Tensor]:
-		return self.__add__(other)
-	def __rmul__(self,other:Union['air',torch.Tensor,float,int])->Union['air',torch.Tensor]:
-		return self.__mul__(other)
-	def __rpow__(self,other:Union['air',torch.Tensor,float,int])->Union['air',torch.Tensor]:
-		from operator import pow as op
-		return self.op_elem2(op,other,self)
 	def __rmatmul__(self,other:Union['air',torch.Tensor])->Union['air',torch.Tensor]:
 		if isinstance(other,torch.Tensor):
 			return self.__class__(other,None)@self
@@ -389,48 +449,69 @@ class air(base):
 		if all(x is None for x in self.r):
 			return func(self.v)
 
-		temp_repeat=[1 if self.r[x] is None else self.r[x] for x in range(len(self.v.shape))]
+		coef=[1 if x is None else torch.sqrt(x) for x in self.r]
 		#compressed matrix can be accelerated
-
-		scaled = ((self.v * (torch.sqrt(temp_repeat[1]))).T * (torch.sqrt(temp_repeat[0]))).T
+		scaled = ((self.v * coef[1]).T * coef[0]).T
 		U, S, VT = func(scaled)
+		U=(U.T / coef[0]).T
+		VT=VT / coef[1]
 
 		return (
-			self.__class__((U.T / (torch.sqrt(temp_repeat[0]))).T,[self.r[0],None]), 
+			self.__class__(U,[self.r[0],None]) if self.r[0] is not None else U, 
    			S, 
-      		self.__class__(VT / (torch.sqrt(temp_repeat[1])), [None, self.r[1]]),
+      		self.__class__(VT, [None, self.r[1]]) if self.r[1] is not None else VT
 		)
-
-	def sum(self,axis:Union[int,list[int],None]=None)->Union[torch.Tensor,'air']:
+	@classmethod
+	def op_agg(cls,func:Callable,func2:Callable,op1:'air',axis:Union[int,list[int],None],**ka):
+		"""
+		Aggregation operation along axis.
+		"""
+		axis=sorted(op1._resolve_axis(axis),reverse=True)
+		if len(axis)==0:
+			return op1.reduce()
+		v=op1.v
+		for xi in axis:
+			if op1.r[xi] is None:
+				v=func(v,axis=xi,**ka)
+			else:
+				v=func(func2(v.swapaxes(xi,-1),op1.r[xi]).swapaxes(xi,-1),axis=xi,**ka)
+		r=[op1.r[x] for x in filter(lambda y:y not in axis,range(op1.ndim))]
+		return cls(v,r).reduce()
+	def sum(self,*a,**ka):
 		"""
 		Sums along axis.
 		"""
-		axis=sorted(self._resolve_axis(axis),reverse=True)
-		if len(axis)==0:
-			return self.reduce()
-		v=self.v
-		for xi in axis:
-			if self.r[xi] is None:
-				v=v.sum(axis=xi)
-			else:
-				v=(v.swapaxes(xi,-1)*self.r[xi]).swapaxes(xi,-1).sum(axis=xi)
-		r=[self.r[x] for x in filter(lambda y:y not in axis,range(self.ndim))]
-		return self.__class__(v,r).reduce()
+		return torch.sum(self,*a,**ka)
+	def prod(self,*a,**ka):
+		"""
+		Computes the product along axis.
+		"""
+		return torch.prod(self,*a,**ka)
+	def mean(self,axis:Union[int,list[int],None]=None,**ka):
+		"""
+		Computes the mean along axis.
+		"""
+		ans=self.sum(axis=axis,**ka)
+		return ans/(self.shape.numel()//ans.shape.numel())
 	@classmethod
 	def __torch_function__(cls, func, types, args=(), kwargs={}):
-		if len(args)<=len(cls.HANDLED_FUNCTIONS_elem) and func in cls.HANDLED_FUNCTIONS_elem[len(args)-1] and any(isinstance(x, cls) for x in args):
+		if len(args)<=len(cls.HANDLED_FUNCTIONS_elem) and func in cls.HANDLED_FUNCTIONS_elem[len(args)-1]:
 			if len(args)==1:
 				#Broadcasted elementwise operation
 				return cls.op_elem1(func,*args,**kwargs)
 			if len(args)==2:
 				#Elementwise operation with two operands
 				return cls.op_elem2(func,*args,**kwargs)
-		if func in cls.HANDLED_FUNCTIONS_other and any(issubclass(x, cls) for x in args):
+		if func in cls.HANDLED_FUNCTIONS_agg:
+			#Aggregation operation
+			return cls.op_agg(func,cls.HANDLED_FUNCTIONS_agg[func],*args,**kwargs)
+		if func in cls.HANDLED_FUNCTIONS_atom:
+			#Operation handled by the object's own function under the same name
+			return getattr(args[0],func.__name__)(*args[1:], **kwargs)
+		if func in cls.HANDLED_FUNCTIONS_other:
 			#Other operations
 			return cls.HANDLED_FUNCTIONS_other[func](*args, **kwargs)
 		return NotImplemented
-
-
 
 class composite(base):
 	HANDLED_FUNCTIONS={
@@ -453,7 +534,7 @@ class composite(base):
 		if any(x.shape[:axis]+x.shape[axis+1:]!=vs[0].shape[:axis]+vs[0].shape[axis+1:] for x in vs[1:]):
 			raise ValueError('All variables must have the same shape except for the composite axis.')
 		if any(x.dtype!=vs[0].dtype for x in vs[1:]):
-			raise ValueError('All variables must have the same dtype.')
+			raise ValueError('All variables must have the same dtype but got {}.'.format([x.dtype for x in vs]))
 		if any(x.device!=vs[0].device for x in vs[1:]):
 			raise ValueError('All variables must have the same device.')
 		if any(x.requires_grad!=vs[0].requires_grad for x in vs[1:]):
@@ -470,7 +551,7 @@ class composite(base):
 		self.device=self.vs[0].device
 		self.requires_grad=self.vs[0].requires_grad
 		self.ndim=self.vs[0].ndim
-		self.shape=self.vs[0].shape[:self.axis]+(sum(x.shape[self.axis] for x in self.vs),)+self.vs[0].shape[self.axis+1:]
+		self.shape=torch.Size(self.vs[0].shape[:self.axis]+(sum(x.shape[self.axis] for x in self.vs),)+self.vs[0].shape[self.axis+1:])
 		self.sizes=torch.tensor([x.shape[self.axis] for x in self.vs],dtype=torch.int,device=self.device,requires_grad=False)
 		self.sizesc=torch.cat([torch.tensor([0],dtype=torch.int,device=self.device,requires_grad=False),self.sizes.cumsum(0)],axis=0)
 	def __repr__(self)->str:

@@ -37,7 +37,7 @@ def bh(pv, weight=None,size=None):
 	if size is None:
 		size = w[-1]
 	else:
-		assert size>=w[-1]
+		assert size>=w[-1],f'Total number of tests ({size}) should be no less than the number of P-values provided ({w[-1]}).'
 	w /= size
 	pv2 /= w
 	pv2[~np.isfinite(pv2)] = 1

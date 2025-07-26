@@ -119,7 +119,11 @@ def mr(diri:str,fo:str,full:bool=False,qcis:float=0.1,qtrans:float=0.5,pcis:floa
 		d1['state']=dir1
 		ans.append(d1)
 	#Output to file
-	ans=pd.concat(ans,axis=0)
+	if len(ans)==0 or all(len(x)==0 for x in ans):
+		logging.warning('No significant SNP->cis-gene->trans-gene triplet relations found.')
+		ans=pd.DataFrame(columns=['SNP','Gene_c','s0_c','l0_c','b_c','s_c','r_c','p_c','q_c','type_c','q_filtered_c','Gene_t','s0_t','l0_t','b_t','s_t','r_t','p_t','q_t','type_t','q_filtered_t','q_trans','state'])
+	else:
+		ans=pd.concat(ans,axis=0)
 	logging.info('Writing to file {}'.format(fo))
 	ans.to_csv(fo,sep='\t',header=True,index=False)
 

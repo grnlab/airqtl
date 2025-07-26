@@ -592,10 +592,10 @@ def qvalue(diri_data:str,fi_result:str,fo_cis:str,fo_trans:str,qcut_cis:float=1,
 
 	#Separate cis and trans relations
 	t1=d0['dmeta_e'].reindex(index=d0['dime'])
-	t1['chr'].fillna(-1,inplace=True)
+	t1['chr']=t1['chr'].fillna(-1)
 	t1['start']=t1['start'].fillna(-1).astype(int)
 	t1['stop']=t1['stop'].fillna(-1).astype(int)
-	t1['strand'].fillna('+',inplace=True)
+	t1['strand']=t1['strand'].fillna('+')
 	t1=[d0['dmeta_g'].reindex(index=d0['dimg'],fill_value=-1),t1]
 	del d0
 	t2=[dict(zip(x.index,range(len(x.index)))) for x in t1]
