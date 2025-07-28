@@ -46,7 +46,7 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 	assert all(len(x)>0 for x in vals),'Each covariate must have at least one value.'
 
 	#Load dataset
-	d=plib.load_dataset(diri)
+	d=plib.load_dataset(diri,noslim=True)
 	assert all(x in d['dccd'].columns for x in covc),'At least one discrete cell covariate not found in dataset.'
 	assert d['dccd'][covc].isna().sum().sum()==0,'At least one discrete cell covariate contains missing values.'
 	assert all(x in d['dcdd'].columns for x in covd),'At least one discrete donor covariate not found in dataset.'
@@ -328,7 +328,7 @@ def association(diri_data:str,fo:str,diri_meta:Optional[str]=None,effect:str='li
 	from .. import cov, heritability, kinship
 	from ..association import fmt1 as fmt
 	from ..association import fmt1_header as fmt_header
-	from ..utils.eqtl import compute_locs
+	from ..utils.eqtl import compute_locs, find_cis
 	from ..utils.numpy import groupby
 	from . import dataset as plib
 	from .dataset import load_dataset
@@ -469,11 +469,13 @@ def association(diri_data:str,fo:str,diri_meta:Optional[str]=None,effect:str='li
 
 	#Obtain SNP and gene locations
 	t1=d['dmeta_e'].reindex(index=d['dime'][select_e])
-	t1['chr'].fillna(-1,inplace=True)
 	t1['start']=t1['start'].fillna(-1).astype(int)
 	t1['stop']=t1['stop'].fillna(-1).astype(int)
-	t1['strand'].fillna('+',inplace=True)
+	t1['strand']=t1['strand'].fillna('+')
 	locs=compute_locs(d['dmeta_g'].reindex(index=d['dimg'],fill_value=-1),t1)
+	#Logging the number of cis and trans SNP-gene pairs
+	t1=find_cis(locs,cisbound,sizeonly=True)
+	logging.info('Found {}/{} cis-/trans- SNP-gene pairs between {} SNPs and {} genes:'.format(t1,d['dimg'].shape[0]*d['dime'].shape[0]-t1,d['dimg'].shape[0],d['dime'].shape[0]))
 
 	#Association testing
 	dc0=dc

@@ -2,6 +2,8 @@
 # Copyright 2025, Lingfei Wang
 #
 # This file is part of airqtl.
+
+# The user is suggested to not edit this file. To customize the pipeline for your own data, please edit Snakefile.config. If you encounter any issues, please raise an issue on GitHub.
 include: "Snakefile.config"
 
 import itertools
@@ -15,7 +17,7 @@ pdir=partial(pjoin,dirbase)
 ldir=partial(pjoin,dirlbase)
 #Target files for each step & run
 assert all(len(x)==1 or all(y.startswith('de.') for y in x) for x in dataset.datasetfiles_data)
-target1_raw_download=[x[0] for x in dataset.datasetfiles_data]+dataset.datasetfiles_meta
+target1_raw_download=[x[0] for x in dataset.datasetfiles_data]+dataset.datasetfiles_meta if download else []
 target1_raw_input=list(dataset.datasetfiles_data)+[[x] for x in dataset.datasetfiles_meta]
 target1_subset=dataset.datasetfiles_subset
 target1_qc=[x[0] for x in dataset.datasetfiles_data]+dataset.datasetfiles_meta
@@ -49,6 +51,8 @@ try:
 	targets_merge=[pdir('merge.tsv.gz')]
 	targets+=targets_subset+targets_qc+targets_association+targets_qvalue+targets_mr+targets_merge
 except FileNotFoundError:
+	if not download:
+		raise
 	targets+=targets_raw_download
 
 if covs=='all':

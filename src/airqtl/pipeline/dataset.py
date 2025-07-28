@@ -93,6 +93,8 @@ def empty_dataset(meta=False):
 	return ans
 
 def check_dataset(d,check_full='data'):
+	import logging
+	
 	#Check fullness
 	assert check_full in ['data','data_only','meta','meta_only','all','none'],f'Unknown check_full value: {check_full}'
 	tsetd=[set(x.split('.')[0] for x in y) for y in datasetfiles_data]
@@ -119,6 +121,10 @@ def check_dataset(d,check_full='data'):
 	for xi in set(['dimd','dimc','dime','dimg'])&dset:
 		assert len(d[xi])==len(set(d[xi])),f'Duplicate names found for {xi}'
 		assert "" not in d[xi],f'Empty name found for {xi}'
+	for xi in set(['dmeta_e','dmeta_g'])&dset:
+		assert len(d[xi].index)==len(set(d[xi].index)),f'Duplicate names found for {xi}'
+		assert "" not in d[xi].index,f'Empty name found for {xi}'
+
 	assert any(x not in d for x in ['de','dime','dimc']) or d['de'].shape==(ne,nc),f'Expression matrix shape mismatch: {d["de"].shape} vs {(ne,nc)}'
 	assert any(x not in d for x in ['dg','dimg']) or d['dg'].shape[0]==ng,f'Genotype matrix shape[0] mismatch: {d["dg"].shape[0]} vs {ng}'
 	assert any(x not in d for x in ['dd','dimc']) or d['dd'].shape==(nc,),f'Donor ID shape mismatch: {d["dd"].shape} vs {(nc,)}'
@@ -131,6 +137,8 @@ def check_dataset(d,check_full='data'):
 		assert 'dimd' not in d or d['dgmap'].shape==(nd,),f'Donor map shape mismatch: {d["dgmap"].shape} vs {(nd,)}'
 		assert d['dgmap'].min()>=0,'Donor map contains negative values'
 		assert 'dg' not in d or d['dgmap'].max()<d['dg'].shape[1],f'Donor map contains values larger than {d["dg"].shape[1]}'
+	for xi in set(['dccc','dccd','dcdc','dcdd'])&dset:
+		assert d[xi] is not None,f'{xi} is None'
 	if 'dimc' in d:
 		for xi in set(['dccc','dccd'])&dset:
 			assert len(d[xi])==nc,f'Number of cells in {xi}={d[xi].shape[0]} does not match {nc}'
@@ -141,7 +149,15 @@ def check_dataset(d,check_full='data'):
 			assert len(d[xi])==nd,f'Number of donors in {xi}={d[xi].shape[0]} does not match {nd}'
 	elif 'dcdc' in d and 'dcdd' in d:
 		assert len(d['dcdc'])==len(d['dcdd']),f'Number of donors in dcdc={d["dcdc"].shape[0]} does not match dcdd={d["dcdd"].shape[0]}'
-		
+
+	for xi in [['dmeta_e','dime'],['dmeta_g','dimg']]:
+		if not all(x in d for x in xi):
+			continue
+		t1=[len(d[xi[0]].index),len(d[xi[1]]),len(set(d[xi[0]].index)&set(d[xi[1]]))]
+		assert t1[2]>0,f'No overlap between {xi[0]} indices and {xi[1]}'
+		if t1[2]<t1[1]/10:
+			logging.warning(f'Fewer than 10% of {xi[1]} indices are present in {xi[0]}.')
+
 def load_dataset_slim(d,check=True,**ka):
 	import numpy as np
 	if 'dd' not in d:
@@ -199,7 +215,12 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 		ans={}
 		for xi in select:
 			ans.update(load_dataset(xi,meta=xi,select=select[xi],noslim=True,**ka2))
-		ans=load_dataset_slim(ans,check=check,**ka)
+		for xi in set(['dccc','dccd','dcdc','dcdd'])&set(ans):
+			if ans[xi] is None:
+				assert 'dim'+xi[2] in ans,f'Empty dataset with no {xi}'
+				ans[xi]=pd.DataFrame(np.array([]).reshape(len(ans['dim'+xi[2]]),0))
+		if not noslim:
+			ans=load_dataset_slim(ans,check=check,**ka)
 		# if check:
 		# 	check_dataset(ans,**ka)
 		return ans
@@ -264,8 +285,7 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 		try:
 			ans[xi]=pd.read_csv(fi,sep='\t',index_col=None,header=0)
 		except pd.errors.EmptyDataError:
-			ans[xi]=pd.DataFrame(np.array([]).reshape(len(ans['dimc']) if xi[2]=='c' else len(ans['dimd']),0))
-
+			ans[xi]=pd.DataFrame(np.array([]).reshape(len(ans['dim'+xi[2]]),0)) if 'dim'+xi[2] in ans else None
 	#Load metadata
 	if 'dmeta_g' in select_set:
 		fi=pjoin(meta,'dmeta_g.tsv.gz')
@@ -437,7 +457,7 @@ def filter_genes(d0,select,**ka):
 def filter_donors(d0,select,**ka):
 	import numpy as np
 	d=filter_any(d0,select,['dimd','dgmap'],[],['dcdc','dcdd'],[],check=None)
-	if 'dd' in d:
+	if 'dd' in d and d['dd'].size>0:
 		selectid=select if np.issubdtype(select.dtype,np.integer) else np.nonzero(select)[0]
 		selectdict=-np.ones(d['dd'].max()+1,dtype=int)
 		selectdict[selectid]=np.arange(len(selectid))
@@ -457,7 +477,7 @@ def filter_rawdonors(d0,select,**ka):
 		selectdict[selectid]=np.arange(len(selectid))
 		d['dgmap']=selectdict[d['dgmap']]
 		if d['dgmap'].min()<0:
-			d=filter_genes(d,d['dgmap']>=0,check=None)
+			d=filter_donors(d,d['dgmap']>=0,check=None)
 	if 'check' not in ka or ka['check'] is not None:
 		check_dataset(d,**ka)
 	return d
