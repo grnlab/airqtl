@@ -8,7 +8,7 @@ This is an [airqtl](https://github.com/grnlab/airqtl) tutorial to map single-cel
 1. [Install airqtl](https://github.com/grnlab/airqtl#installation) and download this folder
 2. (Optional) Customize pipeline configuration in `Snakefile.config`, especially the `device` parameter if you prefer to use a CPU or a different GPU. See [Understanding and customizing the tutorial](#Understanding-and-customizing-the-tutorial).
 3. Run the pipeline with `snakemake -j 1` **twice** in shell. The first run will download the raw dataset from Zenodo. The second run will read in the cell states to map sceQTLs infer cGRNs for each cell state.
-4. Check the sceQTL output files at `data/association` and cGRN output file at `data/merge.tsv.gz`.
+4. Check the sceQTL and cGRN [output files](#Output-files).
 
 The whole run takes <1 day on a top-end Dell Alienware Aurora R16®, in which single-cell eQTL mapping takes ~10mins for each cell state. The download step can take longer if your internet is slow.
 
@@ -35,11 +35,44 @@ Covariates can be used either for removal during association tests or for subset
 
 All files are compressed with gzip. All files other than the bottom two metadata files should have their dimensions and ordering matching dimd.txt.gz, dimc.txt.gz, dime.txt.gz, and dimg.txt.gz. Input files of the pipeline are also defined in the `datasetfiles_data` and `datasetfiles_meta` variables in [airqtl.pipeline.dataset](../../../src/airqtl/pipeline/dataset.py).
 
+For this tutorial, these input files are automatically downloaded into folder `data/raw`. When running airqtl on your own dataset, you should deposit these input files in the same place before running the pipeline.
+
 ### The pipeline
 * Each step of the pipeline is defined as a rule sequentially in `Snakefile`. Take the sceQTL association as an example, it corresponds to i) the shell command `airqtl eqtl association` and ii) the python function `airqtl.pipline.eqtl.association`. Therefore, you can learn more from either the command `airqtl eqtl association -h` or the docstring of `airqtl.pipline.eqtl.association`. The output files and logs of each step are located in `data/x` and `log/x.log` respectively, where x is the name of the step/rule and can be either a folder or a file with name suffix. Some of the steps are run once for the whole dataset while some are run separately for each cell state.
 * To change pipeline parameters, modify `Snakefile.config`. You can use custom command-line parameters of each step according to their accepted parameters such as those obtained from `airqtl eqtl association -h`.
 * For standard use, you should not modify `Snakefile` which is based on [Snakemake](https://snakemake.readthedocs.io/en/stable/).
 * For advanced use, such as to run the pipeline in parallel or on a cluster, modify `Snakefile` accordingly only if you have the expertise.
+
+### Intermediate files
+Intermediate files are store in specific subfolders inside folder `data`:
+* In folders `subset/{subset}` (from command `airqtl eqtl subset`): Same as input files, but only for the cell and donor subsets selected based on the covariates in `Snakefile.config`.
+* In folders `qc/{subset}` (from command `airqtl eqtl qc`): Same as `subset/{subset}`, but only after quality control that removes certain genotypes, genes, cells, and donors from the subset data above. If too few genotypes, genes, cells, or donors remain, expect empty files.
+
+### Output files
+**IMPORTANT**: Output file formats should be viewed alongside command documentation (e.g. `airqtl eqtl association --help`) and the paper to understand definitions and filters.
+
+Output files are store in specific subfolders inside folder `data`:
+* Files `association/{subset}/result.tsv.lz4` (from command `airqtl eqtl association`) contain eQTL mapping summary statitistics between genes and SNPs for each cell subset. It is a lz4-compressed file. Each row is one association test. Columns are:
+  - Gene: Gene in the association test. Its gene expression, defined as normalized log mRNA proportion, is used for association testing.
+  - SNP: SNP in the association test. Alternative allele count is used for association testing.
+  - s0: Maximum likelihood estimator of sigma (standard deviation multiplier of gene expression) under the null hypothesis
+  - l0: Maximum likelihood estimator of lambda under the null hypothesis. lambda/(1+lambda) is estimated heritability of gene expression from unexplained variance. Available only in linear mixed model.
+  - b: Restricted maximum likelihood estimator for the SNP's effect size on gene expression under the alternative hypothesis
+  - s: Restricted maximum likelihood estimator for sigma under the alternative hypothesis
+  - r: Effective Pearson correlation between the SNP and gene expression. It is computed after transformation with genetic relationship matrix factors (only for linear mixed model) and removal of covariates, based on b and the variances of gene expression and SNP.
+  - p: Two-sided P-value for b or r (equivalent)
+
+* In folders `qvalue/{subset}` (from command `airqtl eqtl qvalue`): `cis.tsv.gz` and `trans.tsv.gz` contain Q values computed with Benjamini-Hochberg procedure separately for cis- and trans-eQTL candidates.
+
+* File `mr.tsv.gz` (from command `airqtl cgrn mr`) contains the Mendelian randomization results for gene regulations using cis-eQTLs as instrumental variables for all cell subsets. Each row is a triplet SNP->cis-gene->trans-gene. Columns are mostly identical with those in folders `qvalue/{subset}`, except with suffices `_c` or `_t` indicating association summary statistics for cis- or trans-interaction, respectively. Additional columns are:
+  - state: cell subset in which the association testing was performed
+  - q_filtered_...: Recomputed Q values after removing unknown genes. q_filtered_c is the final cis-eQTL Q values used in MR step.
+  - q_trans: Recomputed trans-eQTL Q values after removing SNPs not having a significant cis-gene. This column is the final trans-eQTL Q values used in MR step.
+
+* File `merge.tsv.gz` (from command `airqtl cgrn merge`) contains the inferred cGRNs for each cell subset. It merges all available significant SNPs that support the same gene interaction cis-gene->trans-gene in the cell subset. Each row is a cis-gene->trans-gene interaction. Columns are mostly identical with those in file `mr.tsv.gz`, except with suffices `_(max/mean/median/min/std)` indicating the statistics used to merge the SNPs. Additional columns are:
+  - effect_...: Estimated effect size in cis-gene->trans-gene as `b_t/b_c`
+  - n: Number of SNPs merged
+  - nuniq: Number of unique SNPs merged that differ in at least one donor
 
 ## Repurposing the tutorial pipeline for your own dataset
 1. [Run this tutorial pipeline](#Running-the-tutorial) successfully
@@ -49,7 +82,7 @@ All files are compressed with gzip. All files other than the bottom two metadata
 5. [Reformat your own dataset](#Preparing-input-files) into the accepted format and place the files in newly created `data/raw` folder
 6. [Customize the pipeline](#Understanding-and-customizing-the-tutorial) as needed
 7. [Run the pipeline](#Running-the-tutorial) for your own dataset
-8. Check the output files
+8. Check the [output files](#Output-files)
 
 ### Preparing input files
 There are two ways to prepare your input files:

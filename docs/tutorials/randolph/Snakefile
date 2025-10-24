@@ -38,7 +38,7 @@ subset_covs_values=[','.join(x) for x in subset_covs]
 
 try:
 	#Load unique covariate value combinations
-	t1=dataset.load_dataset(pdir('raw'),select=['dccd','dcdd','dd'],check_full='none')
+	t1=dataset.load_dataset(pdir('raw'),select=['dccd','dcdd','dd','dimc','dimd'],check_full='none')
 	t2=[t1['dccd'][subset_covs[0]],t1['dcdd'][subset_covs[1]]]
 	t2=[tuple(x) for x in pd.concat([t2[0],t2[1].iloc[t1['dd']].reset_index(drop=True)],axis=1).drop_duplicates().values.tolist()]
 	covvs=[','.join([str(y) for y in x]) for x in t2]

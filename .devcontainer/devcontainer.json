@@ -1,0 +1,46 @@
+{
+	"name": "AirQTL Development",
+	"build": {
+		"dockerfile": "Dockerfile",
+		"context": ".."
+	},
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {}
+	},
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/usr/local/bin/python",
+				"python.linting.enabled": true,
+				"python.linting.flake8Enabled": true,
+				"editor.codeActionsOnSave": {
+					"source.organizeImports": true
+				},
+				"files.exclude": {
+					"**/__pycache__": true,
+					"**/*.pyc": true,
+					"**/.pytest_cache": true,
+					"**/.coverage": true,
+					"**/.tox": true
+				}
+			}
+		}
+	},
+	"postCreateCommand": "bash .devcontainer/setup.sh",
+	"remoteUser": "vscode",
+	"containerEnv": {
+		"USER_ID": "${localEnv:UID}",
+		"GROUP_ID": "${localEnv:GID}"
+	},
+	"workspaceFolder": "/workspace",
+	"mounts": [
+		"source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached"
+	],
+	"runArgs": [
+		"--gpus=all"
+	]
+}
+
+

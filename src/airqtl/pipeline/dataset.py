@@ -210,19 +210,19 @@ def load_dataset(folder,meta=None,select=None,check=True,noslim=False,**ka):
 		assert folder is None,'folder must be None when select is dict'
 		t1=list(itertools.chain.from_iterable(select.values()))
 		assert len(t1)==len(set(t1))
-		ka2=dict(ka)
-		ka2['check_full']='none'
 		ans={}
 		for xi in select:
-			ans.update(load_dataset(xi,meta=xi,select=select[xi],noslim=True,**ka2))
+			ans.update(load_dataset(xi,meta=xi,select=select[xi],noslim=True,check=False))
 		for xi in set(['dccc','dccd','dcdc','dcdd'])&set(ans):
 			if ans[xi] is None:
 				assert 'dim'+xi[2] in ans,f'Empty dataset with no {xi}'
 				ans[xi]=pd.DataFrame(np.array([]).reshape(len(ans['dim'+xi[2]]),0))
+		ka2=dict(ka)
+		ka2['check_full']='none'
 		if not noslim:
-			ans=load_dataset_slim(ans,check=check,**ka)
-		# if check:
-		# 	check_dataset(ans,**ka)
+			ans=load_dataset_slim(ans,check=check,**ka2)
+		elif check:
+			check_dataset(ans,**ka2)
 		return ans
 	if select is None:
 		select=list(datasetfiles_data)

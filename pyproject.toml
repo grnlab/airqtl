@@ -8,12 +8,11 @@ authors = [
 ]
 description = "Array of Interleaved Repeats for Quantitative Trait Loci"
 readme = "README.rst"
-license = {file = "LICENSE"}
+license = "BSD-3-Clause"
 keywords = ["qtl","eqtl","scqtl","sceqtl","lmm","quantitative trait loci","expression quantitative trait loci","single-cell quantitative trait loci","single-cell expression quantitative trait loci","linear mixed model","linear mixed models","population-scale scRNA-seq","gene regulatory network","network inference","causal inference","mendelian randomization"]
 requires-python = ">=3.12"
 classifiers = [
 	"Development Status :: 4 - Beta",
-	"License :: OSI Approved :: BSD License",
 	"Environment :: Console",
 	"Environment :: GPU :: NVIDIA CUDA",
 	"Framework :: Pytest",

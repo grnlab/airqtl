@@ -15,8 +15,8 @@ def _convert_anndata_categories_codes(covar,cells_selected):
 	Convert categories and codes to a list of categories
 	"""
 	import numpy as np
-	categories = np.array(covar['categories'][cells_selected].astype(str))
-	codes = np.array(covar['codes'][cells_selected].astype(int))
+	categories = np.array(covar['categories']).astype(str)
+	codes = np.array(covar['codes'][cells_selected]).astype(int)
 	codemap = [categories[code] for code in codes]
 	return codemap
 
@@ -49,32 +49,38 @@ def _convert_anndata_covar(h5ad,covariates:str,donor_array,cells_selected,nc,cov
 	covariates=list(filter(lambda x:len(x)>0,covariates.split(",")))
 	n=len(covariates)
 	if n==0:
-		return pd.DataFrame(np.zeros((donor_array.max()+1 if covar_type in ['dccd', 'dcdd'] else nc,0)))
+		return pd.DataFrame(np.zeros((donor_array.max()+1 if covar_type in ['dcdc', 'dcdd'] else nc,0)))
+	covariates=[_convert_anndata_covar_rename(x) for x in covariates]
 
 	cov_list = []
+	covariate_all={_convert_anndata_covar_rename(x):x for x in h5ad['obs'].keys()}
+	if len(covariate_all)!=len(h5ad['obs'].keys()):
+		raise ValueError(f"Error: Covariate names are not unique after underscore replacement in h5ad file")
 	for covariate in covariates:
-		if covariate not in h5ad['obs'].keys():
+		if covariate not in covariate_all:
 			raise ValueError(f"Error: Covariate {covariate} not found in h5ad file")
-		if isinstance(h5ad['obs'][covariate],h5py.Group):
-			cov_array = _convert_anndata_categories_codes(h5ad['obs'][covariate],cells_selected)
+		if isinstance(h5ad['obs'][covariate_all[covariate]],h5py.Group):
+			cov_array = _convert_anndata_categories_codes(h5ad['obs'][covariate_all[covariate]],cells_selected)
 		else:
-			cov_array = h5ad['obs'][covariate][cells_selected].astype(str)
+			cov_array = h5ad['obs'][covariate_all[covariate]][cells_selected].astype(str)
 		cov_list.append(cov_array)
 	#map through dd to get donor level specificity
 	if covar_type in ['dccd', 'dcdd']:
 		cov_list = [[_convert_anndata_covar_rename(c) for c in i] for i in cov_list]
 	if covar_type in ['dcdc', 'dcdd']:
 		cov_list = [_convert_anndata_cell_to_donor(donor_array,covariates[i], np.array(cov_list[i])) for i in range(n)]
-	covariates=[_convert_anndata_covar_rename(c) for c in covariates]
 	if len(covariates)!=len(set(covariates)):
 		raise ValueError(f"Covariate names are not unique.")
 	return pd.DataFrame(np.array(cov_list).T,columns=covariates)
 
-def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',ndd:str='',mtx:bool=False,subset_donors:bool=True)->None:
+def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',ndd:str='',mtx:bool=False,subset_donors:bool=True, transpose:bool=False)->None:
 	"""
 	Convert AnnData h5ad file to input format for airqtl.
 	
 	The user still needs to generate airqtl input files regarding genotypes and gene location metadata
+
+	***IMPORTANT: You should generate the genotype input files first before running this function, as convert_anndata will automatically match donors with the existing dimd.txt.gz, and then create a new file based on the donors in the anndata. Otherwise you will have an error when you try to run airqtl. You can use `airqtl utils convert_vcf` or your own custom script. This allows convert_anndata to automatically match donors with existing dimd.txt.gz. See option --subset_donors. The user should also generate gene location metadata separately.***
+
 
 	Parameters
 	------------
@@ -96,6 +102,8 @@ def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',n
 		Whether to convert the expression matrix to mtx format. If True, the expression matrix will be converted to mtx format. If False, the expression matrix will be converted to tsv format.
 	subset_donors:
 		Whether to subset the cells and donors to the donors in dimd.txt.gz if present. If True, the donors will be subset to the donors in the donor file. If False, the dimd.txt.gz file will be overwritten but this may lead to inconsistence with dg.tsv.gz.
+	transpose:
+		Whether the rows or columns of the 'data' in the anndata represent the cells and genes/features. If True, rows=genes/features, cols=cells. If False, rows=cells, cols=genes/features
 	"""
 	import gzip
 	import logging
@@ -178,13 +186,16 @@ def convert_anndata(fi:str,diro:str,donor:str,ncc:str='',ncd:str='',ndc:str='',n
 		with gzip.open(fo,"wt") as f:
 			f.write(linesep.join(genes))
 
-		#de.tsv.gz or de.mtx.gz
+#		de.tsv.gz or de.mtx.gz
 		if any(x not in h5ad['X'] for x in ['data','indices','indptr']):
 			raise ValueError(f"X matrix in h5ad file is not in CSR format")
 		data = h5ad['X']['data'][:]
 		indices = h5ad['X']['indices'][:]
 		indptr = h5ad['X']['indptr'][:]
-		e_array = csr_array((data, indices, indptr), shape=(len(cells_selected), len(genes))).astype(int).tocoo()
+		if transpose:
+			e_array = csr_array((data, indices, indptr), shape=(len(genes), len(cells_selected))).astype(int).transpose().tocoo()
+		else:
+			e_array = csr_array((data, indices, indptr), shape=(len(cells_selected), len(genes))).astype(int).tocoo()
 		t1=cellsdict[e_array.coords[0]]>=0
 		e_array=coo_array((e_array.data[t1],(cellsdict[e_array.coords[0][t1]],e_array.coords[1][t1])),shape=(len(cells_selected),len(genes)))
 		if mtx:
@@ -262,6 +273,8 @@ def convert_vcf(fi: str, diro: str, missing: str = "remove") -> None:
 	"""
 	Convert vcf file to input format for airqtl, and create genotype metadata file.
 
+	***IMPORTANT: This function will generate the donor list dimd.txt.gz based on the donors in your vcf file, but you may need to regenerate it to successfully run airqtl, based on the donors that are actually in your single-cell data. You can use airqtl utils convert_anndata, or your own custom script.***
+
 	Parameters
 	------------
 	fi:
@@ -292,7 +305,7 @@ def convert_vcf(fi: str, diro: str, missing: str = "remove") -> None:
 			if line.startswith("##"):
 				continue
 			if line.startswith("#"):
-				if not line.startswith("#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT"):
+				if not line.startswith("#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT"):
 					raise ValueError(f"Unrecognized header line: {line}")
 				starting_lines=False
 				donors=line.strip().split("\t")[9:]

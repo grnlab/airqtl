@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# Copyright 2025, Lingfei Wang
+# Copyright 2025, Lingfei Wang, Matthew Funk
 #
 # This file is part of airqtl.
 
@@ -104,7 +104,7 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 	plib.check_dataset(d)
 	plib.save_dataset(d2,diro,check_full='none')
 
-def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,eezdn:int=0,eezdp:float=0.1,eezn:int=100,eezp:float=0.02,een:int=0,dcn:int=5,dgp:float=0,gp:float=0,scn:int=500,sdn:int=40,sgn:int=10000,sen:int=500)->None:
+def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,eezdn:int=0,eezdp:float=0.1,eezn:int=100,eezp:float=0.02,een:int=0,dcn:int=5,dgp:float=0,gp:float=0,gdp:float=0,gdn:int=0,scn:int=500,sdn:int=40,sgn:int=10000,sen:int=500,na:int=2)->None:
 	"""
 	Quality control on sceQTL mapping data.
 
@@ -136,6 +136,10 @@ def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,ee
 		Genotype missing rate upper bound for donors
 	gp:
 		Missing rate upper bound for genotypes. Genotype value -1 indicates missing.
+	gdp:
+		Minor allele frequency lower bound for genotypes
+	gdn:
+		Minor allele count lower bound for genotypes
 	scn:
 		Cell count lower bound for dataset
 	sdn:
@@ -144,6 +148,8 @@ def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,ee
 		Genotype count lower bound for dataset
 	sen:
 		Gene count lower bound for dataset
+	na:
+		Number of alleles. Only needed if gdp>0 or gdn>0.
 
 	Method:
 	------------
@@ -161,8 +167,10 @@ def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,ee
 
 	from ..utils.numpy import groupby
 	from . import dataset as plib
-	assert all(x>=0 for x in [cezp,cen,eezdn,eezn,een,dcn,scn,sdn,sgn,sen]),'All parameters must be non-negative.'
+	assert all(x>=0 for x in [cezp,cen,eezdn,eezn,een,dcn,scn,sdn,sgn,sen,gdp,gdn]),'All parameters must be non-negative.'
+	assert na>0,'Number of alleles must be positive.'
 	assert all(0<=x<=1 for x in [eezdp,eezp,dgp,gp]),'All proportions must be in [0,1].'
+	assert all(0<=x<=0.5 for x in [gdp]),'Minor allele frequency must be in [0,0.5].'
 
 	#Load dataset
 	try:
@@ -175,6 +183,8 @@ def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,ee
 		logging.info('Empty dataset. Writing empty file '+diro)
 		plib.save_dataset(plib.empty_dataset(),diro)
 		return
+
+	assert (gdp==0 and gdn==0) or (d['dg'].max()<=na and d['dg'].min()>=-1),f'Genotype values must be in [-1,{na}] (-1 for missing)'
 
 	#QC
 	_logdims(d,'Input dataset')
@@ -205,6 +215,14 @@ def qc(diri:str,diro:str,diri_raw:Optional[str]=None,cezp:int=100,cen:int=500,ee
 			_logdims(d,f'Round {n1}, step 2')
 		#3. QC genotypes
 		selectg=(d['dg']==-1)[:,d['dgmap']].mean(axis=1)<=gp
+		if gdp>0 or gdn>0:
+			ref_allele_count = np.clip(d['dg'],min=0).sum(axis=1)
+			non_missing_count = (d['dg']>=0).sum(axis=1)*na
+			if gdn>0:
+				selectg&=(ref_allele_count>=gdn) & (ref_allele_count<=non_missing_count-gdn)
+			if gdp>0:
+				ref_allele_freq = ref_allele_count/non_missing_count
+				selectg&=(ref_allele_freq>=gdp) & (ref_allele_freq<=1-gdp)
 		if (~selectg).any():
 			d=plib.filter_genotypes(d,selectg,check=None)
 			_logdims(d,f'Round {n1}, step 3')

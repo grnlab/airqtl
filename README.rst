@@ -21,7 +21,7 @@ Pease raise an issue on `github <https://github.com/grnlab/airqtl/issues/new>`_.
 
 References
 ==========================
-* `"Airqtl dissects cell state-specific causal gene regulatory networks with efficient single-cell eQTL mapping" <https://www.biorxiv.org/content/10.1101/2025.01.15.633041>`_ (2025) by Lingfei Wang. bioRxiv 2025.01.15.633041.
+* `"Airqtl dissects cell state-specific causal gene regulatory networks with efficient single-cell eQTL mapping" <https://www.biorxiv.org/content/10.1101/2025.01.15.633041>`_ (2025) by Matthew W. Funk, Yuhe Wang, and Lingfei Wang. bioRxiv 2025.01.15.633041.
 
 FAQ
 ==========================
