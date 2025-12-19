@@ -1,6 +1,6 @@
 [project]
 name = "airqtl"
-version = "0.2.0"
+version = "1.0.0"
 authors = [
 	{ name="Lingfei Wang", email="Lingfei.Wang.github@outlook.com" },
 	{ name="Matthew Funk"},
@@ -12,7 +12,7 @@ license = "BSD-3-Clause"
 keywords = ["qtl","eqtl","scqtl","sceqtl","lmm","quantitative trait loci","expression quantitative trait loci","single-cell quantitative trait loci","single-cell expression quantitative trait loci","linear mixed model","linear mixed models","population-scale scRNA-seq","gene regulatory network","network inference","causal inference","mendelian randomization"]
 requires-python = ">=3.12"
 classifiers = [
-	"Development Status :: 4 - Beta",
+	"Development Status :: 5 - Production/Stable",
 	"Environment :: Console",
 	"Environment :: GPU :: NVIDIA CUDA",
 	"Framework :: Pytest",
