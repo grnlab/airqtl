@@ -35,6 +35,7 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 	"""
 
 	import numpy as np
+	import pandas as pd
 	import scipy.sparse
 
 	from . import dataset as plib
@@ -56,7 +57,7 @@ def subset(diri:str,diro:str,covc:str,covd:str,vals:str,rmcov:bool=False)->None:
 	covs=[d['dccd'][x].values for x in covc]+[d['dcdd'][x].values[d['dd']] for x in covd]
 	nc=len(covs)
 	assert len(vals)==nc
-	vals=[int(x) if np.issubdtype(y.dtype,np.integer) else (float(x) if np.issubdtype(y.dtype,np.floating) else x) for x,y in zip(vals,covs)]
+	vals=[int(x) if pd.api.types.is_integer_dtype(y.dtype) else (float(x) if pd.api.types.is_float_dtype(y.dtype) else x) for x,y in zip(vals,covs)]
 	coveq=np.prod([x==y for x,y in zip(covs,vals)],axis=0).astype(bool)
 	if not coveq.any():
 		#No cell, return empty dataset
