@@ -510,7 +510,7 @@ def association(diri_data:str,fo:str,diri_meta:Optional[str]=None,effect:str='li
 	if subset is not None:
 		t1=[dict(zip(x,range(len(x)))) for x in [d['dimg'],d['dime'][select_e]]]
 		t2=subset.shape[0]
-		subset=np.array(list(filter(lambda x:all(x[y] in t1[y] for y in range(2)),subset)))
+		subset=np.array(list(filter(lambda x:all(x[y] in t1[y] for y in range(2)),subset.values)))
 		logging.info('Number of SNP-gene pairs in subset after/before filtering: {}/{}'.format(subset.shape[0],t2))
 		subset=np.array([[t1[x][y] for y in subset[:,x]] for x in range(2)])
 		t1=groupby(subset[1])
