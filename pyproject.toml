@@ -27,7 +27,7 @@ dependencies = [
 	"numpy",
 	"h5py",
 	"scipy",
-	"pandas",
+	"pandas<3.0",
 	"networkx",
 	"torch>=2.0",
 	'scikit-learn',
